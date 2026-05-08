@@ -34,8 +34,15 @@ OPUS,PCMU,PCMA,G729,G722,H264
 G.729 usa a biblioteca gratuita `bcg729` dos repositórios Debian (`libbcg729-0` e
 `libbcg729-dev`). O instalador não instala codecs comerciais Sangoma/Digium e desabilita nomes
 comerciais conhecidos no `modules.conf`. Se um pacote oficial `asterisk-codec-bcg729` estiver
-disponível no repositório configurado, ele é instalado; caso contrário o instalador mantém o
-ambiente sem módulo pago e valida o que estiver disponível.
+disponível no repositório configurado, ele é instalado; caso contrário o instalador compila
+`codec_g729.so` localmente usando o fonte versionado em `asterisk/codecs/asterisk-g72x` e a
+biblioteca `libbcg729` do Debian.
+
+O fonte local é baseado no projeto `asterisk-g72x`, que suporta Asterisk 1.4 até 22.x. O instalador
+prefere esse diretório local para evitar download online em reinstalações futuras. Se o diretório
+local não existir, o fallback é baixar `ASTERISK_G72X_SOURCE_URL` e fixar
+`ASTERISK_G72X_SOURCE_REF`; o padrão é o commit
+`55a7b8246c8ad3f32e50a033529e5a52c11a5592`.
 
 H.264 é tratado como codec de vídeo/pass-through. O módulo `format_h264` é habilitado no build
 quando disponível. A seleção efetiva vem dos campos do Provider, Extension e Trunk; no Realtime
@@ -127,6 +134,7 @@ asterisk -rx "module show like res_pjsip"
 asterisk -rx "module show like g729"
 asterisk -rx "module show like h264"
 asterisk -rx "core show codecs audio" | grep -i g729
+asterisk -rx "core show translation" | grep -i g729
 asterisk -rx "core show codecs video" | grep -i h264
 asterisk -rx "pjsip show endpoints"
 asterisk -rx "pjsip show contacts"
