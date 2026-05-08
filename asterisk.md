@@ -61,7 +61,11 @@ O instalador escreve:
 /etc/asterisk/logger.conf
 /etc/asterisk/cdr_adaptive_odbc.conf
 /etc/asterisk/cel_odbc.conf
+/etc/systemd/system/asterisk.service
 ```
+
+O serviço é controlado por um unit systemd nativo gerado pelo instalador. O runtime/socket fica
+em `/run/asterisk`, evitando dependência do script SysV criado por `make config`.
 
 ## Heartbeat
 
@@ -87,6 +91,10 @@ Resposta esperada:
 }
 ```
 
+Se o heartbeat retornar `404`, a instalação local ainda pode estar correta. Esse status indica
+que a API publicada em `APP_BASE` ainda não tem a rota `/api/v1/pabx/asterisk/heartbeat`
+implantada/reiniciada, ou que o backend ativo não está na mesma versão do repositório.
+
 ## Diagnóstico
 
 ```bash
@@ -95,6 +103,8 @@ asterisk -V
 asterisk -rx "core show uptime"
 asterisk -rx "odbc show"
 asterisk -rx "module show like res_odbc"
+asterisk -rx "module show like res_config_odbc"
+asterisk -rx "module show like res_sorcery_realtime"
 asterisk -rx "module show like res_pjsip"
 asterisk -rx "pjsip show endpoints"
 asterisk -rx "pjsip show contacts"
