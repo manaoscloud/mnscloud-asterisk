@@ -23,6 +23,24 @@ https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-22-current.tar.gz
 
 O valor pode ser sobrescrito via `ASTERISK_VERSION` ou `ASTERISK_SOURCE_URL`.
 
+## Codecs
+
+O padrão de mídia do Manaos é:
+
+```text
+OPUS,PCMU,PCMA,G729,G722,H264
+```
+
+G.729 usa a biblioteca gratuita `bcg729` dos repositórios Debian (`libbcg729-0` e
+`libbcg729-dev`). O instalador não instala codecs comerciais Sangoma/Digium e desabilita nomes
+comerciais conhecidos no `modules.conf`. Se um pacote oficial `asterisk-codec-bcg729` estiver
+disponível no repositório configurado, ele é instalado; caso contrário o instalador mantém o
+ambiente sem módulo pago e valida o que estiver disponível.
+
+H.264 é tratado como codec de vídeo/pass-through. O módulo `format_h264` é habilitado no build
+quando disponível. A seleção efetiva vem dos campos do Provider, Extension e Trunk; no Realtime
+Asterisk a engine deve materializar `PCMU` como `ulaw`, `PCMA` como `alaw`, e `H264` como `h264`.
+
 ## Realtime MariaDB
 
 As tabelas físicas seguem o padrão do projeto com `Asterisk` + CamelCase:
@@ -106,6 +124,10 @@ asterisk -rx "module show like res_odbc"
 asterisk -rx "module show like res_config_odbc"
 asterisk -rx "module show like res_sorcery_realtime"
 asterisk -rx "module show like res_pjsip"
+asterisk -rx "module show like g729"
+asterisk -rx "module show like h264"
+asterisk -rx "core show codecs audio" | grep -i g729
+asterisk -rx "core show codecs video" | grep -i h264
 asterisk -rx "pjsip show endpoints"
 asterisk -rx "pjsip show contacts"
 ss -lntup | grep 5060
