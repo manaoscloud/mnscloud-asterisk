@@ -197,3 +197,10 @@ ngrep -d any -W byline port 5060
 O instalador entrega a base Asterisk Realtime. A sincronização de entidades canônicas
 (`VoipPabxExtension`, `VoipPabxTrunk`, `VoipPabxInboundRoute`, `VoipPabxOutboundRoute`) para
 as tabelas `Asterisk*` deve respeitar o contrato multi-tenant acima.
+
+Para reconciliar um servidor Asterisk já instalado após criar ou alterar PABXs/ramais no app:
+
+```bash
+bash scripts/sync-asterisk-realtime.sh
+bash scripts/sync-asterisk-contexts.sh
+```
