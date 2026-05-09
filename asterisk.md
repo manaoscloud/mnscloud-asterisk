@@ -89,14 +89,20 @@ O prompt de confirmação usa `/dev/tty`, então continua funcionando quando o i
 por um wrapper que usa a entrada padrão internamente. Apenas sessões realmente sem terminal de
 controle pulam essa espera.
 
-Quando há IP público validado ou detectado, a API materializa o NAT no Realtime PJSIP em
+Quando o host é validado, a API materializa os defaults de transporte no Realtime PJSIP em
 `AsteriskTransport`:
 
-- `external_media_address = <ip_publico>`;
-- `external_signaling_address = <ip_publico>`;
-- `external_signaling_port = 5060`;
+- `external_media_address` permanece vazio por padrão;
+- `external_signaling_address` permanece vazio por padrão;
+- `external_signaling_port` permanece vazio por padrão;
 - `local_net = <ip_privado>/<prefixo>` quando o instalador consegue detectar a interface local;
+- `allow_reload = no`;
 - `symmetric_transport = yes`.
+
+Em ambientes com redirecionamento de porta no firewall, preencher `external_signaling_*`
+automaticamente pode fazer o PJSIP realtime recriar o transporte e impedir o desafio SIP de sair
+corretamente. Se o ambiente exigir endereço externo em SDP/RTP, configure `external_media_address`
+explicitamente para esse PABX e valide registro, chamada e áudio.
 
 Os endpoints gerados para ramais/trunks já devem manter os campos compatíveis com NAT:
 `force_rport = yes`, `rewrite_contact = yes`, `rtp_symmetric = yes` e `direct_media = no`.
