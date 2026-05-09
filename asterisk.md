@@ -82,8 +82,9 @@ Regras obrigatórias:
 - Não usar dialplan global compartilhado do tipo `_X. => Dial(PJSIP/${EXTEN})`.
 - Não depender do contexto `default` para chamadas entre ramais. O `default` gerado pelo
   instalador é contexto de rejeição/fallback.
-- Cada PABX/tenant/domínio deve ter contexto isolado em `AsteriskEndpoint.context`,
-  `AsteriskEndpoint.subscribe_context` e `AsteriskExtension.context`.
+- Todos os ramais autenticados usam o contexto estático `authenticated`. A separação
+  multi-tenant não depende de criar contextos por PABX; ela é resolvida no banco usando o
+  endpoint chamador (`ramal@dominio`) e o ramal discado.
 - O identificador técnico do endpoint deve ser globalmente único quando houver possibilidade de
   dois tenants usarem o mesmo número de ramal. O ramal visível ao cliente continua em
   `VoipPabxExtension.VpeUsername`, mas o `AsteriskEndpoint.id`, `AsteriskAuth.id` e
@@ -92,25 +93,17 @@ Regras obrigatórias:
   `LOWER(CONCAT(VpeUsername, '@', VoipDomain.VdmName))`, por exemplo
   `5009@pabx-dev3.publichost.cloud`. O `AsteriskAuth.username` permanece apenas o ramal
   (`5009`) para que o cliente continue autenticando com usuário curto dentro do domínio SIP.
-- O contexto realtime padrão de um PABX Asterisk é
-  `LOWER(CONCAT('pabx-', HEX(VoipPabxAccount.VpaUUID)))`, por exemplo
-  `pabx-a1b2c3d4e5f640aa9c11223344556677`. Esse contexto deve ser usado em
-  `AsteriskEndpoint.context`, `AsteriskEndpoint.subscribe_context` e nos registros de
-  `AsteriskExtension`. Não usar `VpaID` aqui, porque ID sequencial pode colidir em cluster
-  multi-primary; `VpaUUID` é o identificador técnico seguro para escrita distribuída.
-- O `extensions.conf` gerado pelo instalador deve declarar somente o `default` de fallback e os
-  contextos `pabx-<VpaUUID compacto>` existentes no banco, cada um com
-  `switch => Realtime/pabx-<VpaUUID compacto>@extensions`. Novos PABXs criados depois da
-  instalação precisam regenerar/recarregar esses contextos antes de receber chamadas internas,
-  usando `scripts/sync-asterisk-contexts.sh`.
-- O dialplan realtime deve rotear chamadas internas somente dentro do escopo permitido
-  (`VoipPabxAccount`/domínio/tenant), nunca por busca global de ramal.
-- Hints/BLF devem seguir o mesmo contexto isolado do tenant/domínio. O hint é um recurso de
-  presença/estado; não deve abrir rota de chamada entre tenants.
+- O `extensions.conf` gerado pelo instalador deve conter `default` como fallback de rejeição e
+  `authenticated` como contexto fixo de chamadas internas. Chamadas para `_X.` resolvem o destino
+  via `ODBC_AST_RESOLVE_INTERNAL(${CHANNEL(pjsip,endpoint)},${EXTEN})`; a consulta só retorna
+  destino quando chamador e chamado pertencem ao mesmo `VoipPabxAccount`/tenant.
+- Hints/BLF devem ser tenant-aware. Quando forem provisionados no realtime, devem usar o endpoint
+  técnico completo como extensão (`1100@pabx-dev1.publichost.cloud`) apontando para
+  `PJSIP/1100@pabx-dev1.publichost.cloud`, nunca apenas o ramal curto (`1100`) em contexto comum.
 
 O modelo de laboratório com `id = 5009` e `context = default` é aceito apenas para validação
-local de registro SIP. Antes de habilitar chamadas entre ramais em produção, o provisionamento
-Asterisk deve gerar IDs técnicos e contextos isolados por tenant/domínio.
+local de registro SIP. Em produção, o provisionamento Asterisk deve usar endpoint técnico
+`ramal@dominio` e contexto `authenticated`.
 
 ## Arquivos Gerados
 
@@ -124,6 +117,7 @@ O instalador escreve:
 /etc/asterisk/extconfig.conf
 /etc/asterisk/sorcery.conf
 /etc/asterisk/res_odbc.conf
+/etc/asterisk/func_odbc.conf
 /etc/asterisk/extensions.conf
 /etc/asterisk/logger.conf
 /etc/asterisk/cdr_adaptive_odbc.conf
@@ -196,11 +190,5 @@ ngrep -d any -W byline port 5060
 
 O instalador entrega a base Asterisk Realtime. A sincronização de entidades canônicas
 (`VoipPabxExtension`, `VoipPabxTrunk`, `VoipPabxInboundRoute`, `VoipPabxOutboundRoute`) para
-as tabelas `Asterisk*` deve respeitar o contrato multi-tenant acima.
-
-Para reconciliar um servidor Asterisk já instalado após criar ou alterar PABXs/ramais no app:
-
-```bash
-bash scripts/sync-asterisk-realtime.sh
-bash scripts/sync-asterisk-contexts.sh
-```
+as tabelas `Asterisk*` deve respeitar o contrato multi-tenant acima e acontecer pelas procedures
+do banco, não por scripts operacionais manuais.
