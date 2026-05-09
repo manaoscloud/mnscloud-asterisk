@@ -85,6 +85,10 @@ O instalador segue o mesmo conceito do FreeSWITCH para evitar depender de IP pú
 5. se a validação não ocorrer, o heartbeat usa descoberta HTTPS de IPv4 público;
 6. se a descoberta falhar, a configuração NAT do Asterisk permanece sem endereço externo explícito.
 
+O prompt de confirmação usa `/dev/tty`, então continua funcionando quando o instalador é chamado
+por um wrapper que usa a entrada padrão internamente. Apenas sessões realmente sem terminal de
+controle pulam essa espera.
+
 Quando há IP público validado ou detectado, a API materializa o NAT no Realtime PJSIP em
 `AsteriskTransport`:
 
