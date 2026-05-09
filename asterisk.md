@@ -101,7 +101,8 @@ Regras obrigatórias:
 - O `extensions.conf` gerado pelo instalador deve declarar somente o `default` de fallback e os
   contextos `pabx-<VpaUUID compacto>` existentes no banco, cada um com
   `switch => Realtime/pabx-<VpaUUID compacto>@extensions`. Novos PABXs criados depois da
-  instalação precisam regenerar/recarregar esses contextos antes de receber chamadas internas.
+  instalação precisam regenerar/recarregar esses contextos antes de receber chamadas internas,
+  usando `scripts/sync-asterisk-contexts.sh`.
 - O dialplan realtime deve rotear chamadas internas somente dentro do escopo permitido
   (`VoipPabxAccount`/domínio/tenant), nunca por busca global de ramal.
 - Hints/BLF devem seguir o mesmo contexto isolado do tenant/domínio. O hint é um recurso de
