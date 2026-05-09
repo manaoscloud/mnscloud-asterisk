@@ -124,6 +124,8 @@ Regras obrigatórias:
   `LOWER(CONCAT(VpeUsername, '@', VoipDomain.VdmName))`, por exemplo
   `5009@pabx-dev3.publichost.cloud`. O `AsteriskAuth.username` permanece apenas o ramal
   (`5009`) para que o cliente continue autenticando com usuário curto dentro do domínio SIP.
+- O `AsteriskAuth.realm` dos ramais deve ser o domínio SIP (`VoipDomain.VdmName`), evitando que
+  clientes recebam desafio digest com o realm global `asterisk` e deixem de completar o REGISTER.
 - O `extensions.conf` gerado pelo instalador deve conter `default` como fallback de rejeição e
   `authenticated` como contexto fixo de chamadas internas. Chamadas para `_X.` resolvem o destino
   via `ODBC_AST_RESOLVE_INTERNAL(${CHANNEL(name)},${EXTEN})`; a consulta identifica o endpoint
