@@ -95,11 +95,21 @@ Regras obrigatórias:
   (`5009`) para que o cliente continue autenticando com usuário curto dentro do domínio SIP.
 - O `extensions.conf` gerado pelo instalador deve conter `default` como fallback de rejeição e
   `authenticated` como contexto fixo de chamadas internas. Chamadas para `_X.` resolvem o destino
-  via `ODBC_AST_RESOLVE_INTERNAL(${CHANNEL(pjsip,endpoint)},${EXTEN})`; a consulta só retorna
-  destino quando chamador e chamado pertencem ao mesmo `VoipPabxAccount`/tenant.
+  via `ODBC_AST_RESOLVE_INTERNAL(${CHANNEL(name)},${EXTEN})`; a consulta identifica o endpoint
+  chamador pelo prefixo `PJSIP/<endpoint>-` do canal e só retorna destino quando chamador e chamado
+  pertencem ao mesmo `VoipPabxAccount`/tenant.
 - Hints/BLF devem ser tenant-aware. Quando forem provisionados no realtime, devem usar o endpoint
   técnico completo como extensão (`1100@pabx-dev1.publichost.cloud`) apontando para
   `PJSIP/1100@pabx-dev1.publichost.cloud`, nunca apenas o ramal curto (`1100`) em contexto comum.
+- Para BLF em telefones/softphones, o valor monitorado deve ser o endpoint técnico completo
+  (`ramal@dominio`). A chamada interna continua discando o ramal curto (`1100`), mas a assinatura
+  BLF precisa ser única no contexto compartilhado `authenticated`.
+- Endpoints Asterisk provisionados pelo app devem manter `allow_subscribe = yes`,
+  `subscribe_context = authenticated` e `device_state_busy_at = 1`, permitindo que
+  `res_pjsip_exten_state` publique estado ocupado/tocando a partir do hint realtime.
+- Eventos `presence`/`presence.winfo` enviados espontaneamente por alguns softphones não são o BLF
+  principal deste modelo. BLF de ramal usa hints + `dialog-info`/extension-state; presença rica pode
+  ser tratada depois como recurso separado.
 
 O modelo de laboratório com `id = 5009` e `context = default` é aceito apenas para validação
 local de registro SIP. Em produção, o provisionamento Asterisk deve usar endpoint técnico
