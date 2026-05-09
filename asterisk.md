@@ -115,6 +115,33 @@ O modelo de laboratório com `id = 5009` e `context = default` é aceito apenas 
 local de registro SIP. Em produção, o provisionamento Asterisk deve usar endpoint técnico
 `ramal@dominio` e contexto `authenticated`.
 
+## Trunks Asterisk
+
+Trunks criados no app com `engine = asterisk` são materializados automaticamente nas tabelas
+realtime do Asterisk quando o recurso é criado, alterado ou removido:
+
+- `AsteriskEndpoint`: endpoint técnico `trunk-<VptID>`.
+- `AsteriskAor`: contato estático `sip:<host>:<port>`.
+- `AsteriskAuth`: criado quando `authMode` exige digest e há usuário/senha.
+- `AsteriskEndpointIdentify`: criado para trunks inbound/both usando `allowedCidrs` ou `host`.
+- `AsteriskRegistration`: criado quando `authMode = register`, `registerEnabled = true` e há
+  usuário/senha.
+
+O contrato de trunk é engine-aware, mas a engine não é escolhida no trunk. A entidade canônica é
+`VoipPabxTrunk`, e a engine é derivada do `VoipPabxServer` vinculado ao PABX. Cada engine materializa
+apenas seus artefatos runtime. Para Asterisk, o renderer da API grava as tabelas `Asterisk*`; para
+FreeSWITCH, os mesmos campos canônicos são renderizados como gateways no `sofia.conf` via XML Curl.
+
+O Asterisk suporta três formas principais nesta modelagem:
+
+- `ip_acl`: identifica chamadas recebidas por IP/CIDR em `AsteriskEndpointIdentify`.
+- `digest`: cria auth no endpoint para autenticação SIP digest.
+- `register`: cria auth e registro outbound periódico em `AsteriskRegistration`.
+
+O contexto de entrada dos trunks Asterisk é `trunk-inbound`. Esse contexto deve resolver rotas de
+entrada por trunk/DID para ramal, fila, grupo, URA ou destino externo sem depender de contexto por
+PABX.
+
 ## Arquivos Gerados
 
 O instalador escreve:
