@@ -7,11 +7,11 @@ PJSIP Realtime com MariaDB/ODBC. Ele segue o mesmo padrão operacional dos insta
 FreeSWITCH, Kamailio e OpenSIPS:
 
 - cria/carrega o node UUID em `/etc/mnscloud/pabx/node.uuid`;
-- em instalação interativa, imprime o node UUID no início e aguarda o cadastro no
-  `VoipPabxServer` com `VpsEngine = 'asterisk'`;
+- tenta vincular o node UUID ao `VoipPabxServer` com `VpsEngine = 'asterisk'` via API bootstrap;
+- em instalação interativa, imprime o node UUID e aguarda cadastro manual somente se o bootstrap
+  não localizar um servidor compatível;
 - valida o cadastro via heartbeat API antes de continuar, quando o operador confirma;
-- tenta vincular o node UUID ao `VoipPabxServer` cadastrado com `VpsEngine = 'asterisk'`
-  quando houver credenciais DB disponíveis como compatibilidade operacional;
+- não executa SQL direto para vincular o node UUID;
 - preserva arquivos originais com `.bkp`;
 - gera configuração limpa controlada pelo Manaos Cloud;
 - valida serviço e módulos básicos após a instalação.
@@ -79,11 +79,17 @@ mapeamento é feito em `/etc/asterisk/extconfig.conf`.
 O instalador segue o mesmo conceito do FreeSWITCH para evitar depender de IP público no `.env`:
 
 1. gera/carrega o node UUID logo no início;
-2. pausa em instalação interativa para o operador cadastrar esse UUID no servidor Asterisk;
-3. valida o cadastro via `POST /api/v1/pabx/asterisk/heartbeat`;
-4. se a API retornar `VoipPabxServer.VpsPublicIP`, esse IP é usado;
-5. se a validação não ocorrer, o heartbeat usa descoberta HTTPS de IPv4 público;
-6. se a descoberta falhar, a configuração NAT do Asterisk permanece sem endereço externo explícito.
+2. tenta vincular o servidor via `POST /api/v1/pabx/asterisk/bootstrap`;
+3. pausa em instalação interativa somente se a API não conseguir localizar um servidor compatível;
+4. valida o cadastro via `POST /api/v1/pabx/asterisk/heartbeat`;
+5. se a API retornar `VoipPabxServer.VpsPublicIPv4`, esse IP é usado;
+6. se a validação não ocorrer, o heartbeat usa descoberta HTTPS de IPv4 público;
+7. se o host tiver IPv6 global, o heartbeat também envia `publicIPv6`, `privateIPv6`
+   e `localNetIPv6`;
+8. se a descoberta falhar, a configuração NAT do Asterisk permanece sem endereço externo explícito.
+
+O bootstrap usa somente a API e exige token em `ASTERISK_API_TOKEN`, `PABX_API_TOKEN` ou
+`WORKER_PABX_TOKEN`. O instalador não executa SQL direto para vincular `VpsNodeUUID`.
 
 O prompt de confirmação usa `/dev/tty`, então continua funcionando quando o instalador é chamado
 por um wrapper que usa a entrada padrão internamente. Apenas sessões realmente sem terminal de
@@ -92,20 +98,28 @@ controle pulam essa espera.
 Quando o host é validado, a API materializa os defaults de transporte no Realtime PJSIP em
 `AsteriskTransport`:
 
-- `external_media_address` permanece vazio por padrão;
-- `external_signaling_address` permanece vazio por padrão;
-- `external_signaling_port` permanece vazio por padrão;
+- `external_media_address = <ip_publico>` quando o heartbeat informa ou confirma o IPv4 público;
+- `external_signaling_address = <ip_publico>` quando o heartbeat informa ou confirma o IPv4 público;
+- `external_signaling_port = 5060`;
 - `local_net = <ip_privado>/<prefixo>` quando o instalador consegue detectar a interface local;
 - `allow_reload = no`;
 - `symmetric_transport = yes`.
 
-Em ambientes com redirecionamento de porta no firewall, preencher `external_signaling_*`
-automaticamente pode fazer o PJSIP realtime recriar o transporte e impedir o desafio SIP de sair
-corretamente. Se o ambiente exigir endereço externo em SDP/RTP, configure `external_media_address`
-explicitamente para esse PABX e valide registro, chamada e áudio.
+Se o host tiver IPv6 global, a API também cria os transportes `transport-udp6` e `transport-tcp6`
+com `bind = [::]:5060`, endereço externo IPv6 e `local_net` IPv6. Assim clientes IPv6-only podem
+registrar diretamente por IPv6, enquanto clientes dual-stack continuam livres para escolher o
+caminho que funcionar melhor via DNS/rede.
+
+Em ambientes com NAT, o transporte deve anunciar o IPv4 público para evitar respostas SIP com
+`Contact` privado/quebrado, enquanto `local_net` mantém a rede interna fora da reescrita externa.
+Depois de alterar esses campos, reinicie o Asterisk e recrie as contas nos softphones para limpar
+estado de registro antigo.
 
 Os endpoints gerados para ramais/trunks já devem manter os campos compatíveis com NAT:
-`force_rport = yes`, `rewrite_contact = yes`, `rtp_symmetric = yes` e `direct_media = no`.
+`force_rport = yes`, `rewrite_contact = yes`, `rtp_symmetric = yes`, `direct_media = no`,
+`identify_by = auth_username,username` e `from_domain = <dominio>`. Ramais não devem fixar
+`transport`, para que o PJSIP use o transporte real do contato registrado (`transport-udp` ou
+`transport-udp6`).
 
 ## Multi-Tenant, Domínios e Realtime
 
