@@ -70,6 +70,47 @@ Os nomes das colunas dessas tabelas preservam os campos esperados pelo Asterisk 
 (`id`, `aors`, `auth`, `context`, `match`, etc.). O nome físico da tabela é nosso, mas o
 mapeamento é feito em `/etc/asterisk/extconfig.conf`.
 
+## Multi-Tenant, Domínios e Realtime
+
+O Asterisk deve ser tratado como runtime realtime multi-tenant. O instalador entrega apenas a
+base PJSIP/ODBC/Sorcery; a separação de tenants deve ser materializada nas tabelas `Asterisk*`
+pela camada de provisionamento a partir das entidades canônicas (`VoipPabxAccount`,
+`VoipPabxExtension`, `VoipPabxTrunk` e rotas).
+
+Regras obrigatórias:
+
+- Não usar dialplan global compartilhado do tipo `_X. => Dial(PJSIP/${EXTEN})`.
+- Não depender do contexto `default` para chamadas entre ramais. O `default` gerado pelo
+  instalador é contexto de rejeição/fallback.
+- Cada PABX/tenant/domínio deve ter contexto isolado em `AsteriskEndpoint.context`,
+  `AsteriskEndpoint.subscribe_context` e `AsteriskExtension.context`.
+- O identificador técnico do endpoint deve ser globalmente único quando houver possibilidade de
+  dois tenants usarem o mesmo número de ramal. O ramal visível ao cliente continua em
+  `VoipPabxExtension.VpeUsername`, mas o `AsteriskEndpoint.id`, `AsteriskAuth.id` e
+  `AsteriskAor.id` devem evitar colisão entre tenants/domínios.
+- Para ramais SIP de tenant com domínio, o identificador técnico padrão é
+  `LOWER(CONCAT(VpeUsername, '@', VoipDomain.VdmName))`, por exemplo
+  `5009@pabx-dev3.publichost.cloud`. O `AsteriskAuth.username` permanece apenas o ramal
+  (`5009`) para que o cliente continue autenticando com usuário curto dentro do domínio SIP.
+- O contexto realtime padrão de um PABX Asterisk é
+  `LOWER(CONCAT('pabx-', HEX(VoipPabxAccount.VpaUUID)))`, por exemplo
+  `pabx-a1b2c3d4e5f640aa9c11223344556677`. Esse contexto deve ser usado em
+  `AsteriskEndpoint.context`, `AsteriskEndpoint.subscribe_context` e nos registros de
+  `AsteriskExtension`. Não usar `VpaID` aqui, porque ID sequencial pode colidir em cluster
+  multi-primary; `VpaUUID` é o identificador técnico seguro para escrita distribuída.
+- O `extensions.conf` gerado pelo instalador deve declarar somente o `default` de fallback e os
+  contextos `pabx-<VpaUUID compacto>` existentes no banco, cada um com
+  `switch => Realtime/pabx-<VpaUUID compacto>@extensions`. Novos PABXs criados depois da
+  instalação precisam regenerar/recarregar esses contextos antes de receber chamadas internas.
+- O dialplan realtime deve rotear chamadas internas somente dentro do escopo permitido
+  (`VoipPabxAccount`/domínio/tenant), nunca por busca global de ramal.
+- Hints/BLF devem seguir o mesmo contexto isolado do tenant/domínio. O hint é um recurso de
+  presença/estado; não deve abrir rota de chamada entre tenants.
+
+O modelo de laboratório com `id = 5009` e `context = default` é aceito apenas para validação
+local de registro SIP. Antes de habilitar chamadas entre ramais em produção, o provisionamento
+Asterisk deve gerar IDs técnicos e contextos isolados por tenant/domínio.
+
 ## Arquivos Gerados
 
 O instalador escreve:
@@ -154,4 +195,4 @@ ngrep -d any -W byline port 5060
 
 O instalador entrega a base Asterisk Realtime. A sincronização de entidades canônicas
 (`VoipPabxExtension`, `VoipPabxTrunk`, `VoipPabxInboundRoute`, `VoipPabxOutboundRoute`) para
-as tabelas `Asterisk*` deve ser feita pelo worker PABX Asterisk.
+as tabelas `Asterisk*` deve respeitar o contrato multi-tenant acima.
