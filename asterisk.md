@@ -7,7 +7,11 @@ PJSIP Realtime com MariaDB/ODBC. Ele segue o mesmo padrão operacional dos insta
 FreeSWITCH, Kamailio e OpenSIPS:
 
 - cria/carrega o node UUID em `/etc/mnscloud/pabx/node.uuid`;
-- tenta vincular o node UUID ao `VoipPabxServer` cadastrado com `VpsEngine = 'asterisk'`;
+- em instalação interativa, imprime o node UUID no início e aguarda o cadastro no
+  `VoipPabxServer` com `VpsEngine = 'asterisk'`;
+- valida o cadastro via heartbeat API antes de continuar, quando o operador confirma;
+- tenta vincular o node UUID ao `VoipPabxServer` cadastrado com `VpsEngine = 'asterisk'`
+  quando houver credenciais DB disponíveis como compatibilidade operacional;
 - preserva arquivos originais com `.bkp`;
 - gera configuração limpa controlada pelo Manaos Cloud;
 - valida serviço e módulos básicos após a instalação.
@@ -69,6 +73,29 @@ AsteriskCel
 Os nomes das colunas dessas tabelas preservam os campos esperados pelo Asterisk Realtime
 (`id`, `aors`, `auth`, `context`, `match`, etc.). O nome físico da tabela é nosso, mas o
 mapeamento é feito em `/etc/asterisk/extconfig.conf`.
+
+## NAT e IP Público
+
+O instalador segue o mesmo conceito do FreeSWITCH para evitar depender de IP público no `.env`:
+
+1. gera/carrega o node UUID logo no início;
+2. pausa em instalação interativa para o operador cadastrar esse UUID no servidor Asterisk;
+3. valida o cadastro via `POST /api/v1/pabx/asterisk/heartbeat`;
+4. se a API retornar `VoipPabxServer.VpsPublicIP`, esse IP é usado;
+5. se a validação não ocorrer, o heartbeat usa descoberta HTTPS de IPv4 público;
+6. se a descoberta falhar, a configuração NAT do Asterisk permanece sem endereço externo explícito.
+
+Quando há IP público validado ou detectado, a API materializa o NAT no Realtime PJSIP em
+`AsteriskTransport`:
+
+- `external_media_address = <ip_publico>`;
+- `external_signaling_address = <ip_publico>`;
+- `external_signaling_port = 5060`;
+- `local_net = <ip_privado>/<prefixo>` quando o instalador consegue detectar a interface local;
+- `symmetric_transport = yes`.
+
+Os endpoints gerados para ramais/trunks já devem manter os campos compatíveis com NAT:
+`force_rport = yes`, `rewrite_contact = yes`, `rtp_symmetric = yes` e `direct_media = no`.
 
 ## Multi-Tenant, Domínios e Realtime
 
