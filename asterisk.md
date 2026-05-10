@@ -13,7 +13,7 @@ FreeSWITCH, Kamailio e OpenSIPS:
 - valida o cadastro via heartbeat API antes de continuar, quando o operador confirma;
 - não executa SQL direto para vincular o node UUID;
 - preserva arquivos originais com `.bkp`;
-- gera configuração limpa controlada pelo Manaos Cloud;
+- gera configuração limpa controlada pelo mnscloud;
 - valida serviço e módulos básicos após a instalação.
 
 ## Versão
@@ -29,7 +29,7 @@ O valor pode ser sobrescrito via `ASTERISK_VERSION` ou `ASTERISK_SOURCE_URL`.
 
 ## Codecs
 
-O padrão de mídia do Manaos é:
+O padrão de mídia do mnscloud é:
 
 ```text
 OPUS,PCMU,PCMA,G729,G722,H264
