@@ -215,8 +215,23 @@ O instalador escreve:
 /etc/systemd/system/asterisk.service
 ```
 
+O `logger.conf` gerado pelo instalador preserva o arquivo original com `.bkp` e recria uma
+configuração limpa com `console`, `messages` e `full` ativos. O arquivo
+`/var/log/asterisk/full` recebe `notice`, `warning`, `error`, `debug` e `verbose`, para facilitar
+diagnóstico de PJSIP/realtime sem depender somente do journal.
+
 O serviço é controlado por um unit systemd nativo gerado pelo instalador. O runtime/socket fica
 em `/run/asterisk`, evitando dependência do script SysV criado por `make config`.
+
+## AMI Control
+
+O instalador cria `/etc/asterisk/manager.conf` para o worker `pabx-control`. A senha forte de
+32 caracteres fica em `/etc/mnscloud/pabx/asterisk-ami.secret` e é enviada no heartbeat/bootstrap
+para a API gravar nos campos de controle do `VoipPabxServer`.
+
+Defina `ASTERISK_AMI_ALLOWED_IPS` com o IP autorizado do servidor que roda o worker/API no formato
+AMI, por exemplo `ASTERISK_AMI_ALLOWED_IPS=172.17.0.10/255.255.255.255`. A porta padrão é `5038`
+e o usuário criado é `mnscloud`.
 
 ## Heartbeat
 
