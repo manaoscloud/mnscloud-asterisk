@@ -88,8 +88,10 @@ O instalador segue o mesmo conceito do FreeSWITCH para evitar depender de IP pú
    e `localNetIPv6`;
 8. se a descoberta falhar, a configuração NAT do Asterisk permanece sem endereço externo explícito.
 
-O bootstrap usa somente a API e exige token em `ASTERISK_API_TOKEN`, `PABX_API_TOKEN` ou
-`WORKER_PABX_TOKEN`. O instalador não executa SQL direto para vincular `VpsNodeUUID`.
+O bootstrap usa somente a API. O instalador gera um token por servidor em
+`/etc/mnscloud/pabx/api.token`, envia esse token no bootstrap/heartbeat e a API armazena apenas
+o hash em `VoipPabxServer.VpsApiTokenHash`. O instalador não executa SQL direto para vincular
+`VpsNodeUUID`.
 
 O prompt de confirmação usa `/dev/tty`, então continua funcionando quando o instalador é chamado
 por um wrapper que usa a entrada padrão internamente. Apenas sessões realmente sem terminal de
