@@ -231,9 +231,10 @@ O instalador cria `/etc/asterisk/manager.conf` para o worker `pabx-control`. A s
 32 caracteres fica em `/etc/mnscloud/pabx/asterisk-ami.secret` e é enviada no heartbeat/bootstrap
 para a API gravar nos campos de controle do `VoipPabxServer`.
 
-Defina `ASTERISK_AMI_ALLOWED_IPS` com o IP autorizado do servidor que roda o worker/API no formato
-AMI, por exemplo `ASTERISK_AMI_ALLOWED_IPS=172.17.0.10/255.255.255.255`. A porta padrão é `5038`
-e o usuário criado é `mnscloud`.
+O instalador configura AMI na porta `5038`, cria o usuário `mnscloud`, descobre automaticamente os
+IPs autorizados para o worker/API e gera senha forte local em
+`/etc/mnscloud/pabx/asterisk-ami.secret`. Esses dados são enviados no heartbeat/bootstrap e
+persistidos no cadastro `VoipPabxServer`, sem depender de overrides no `.env`.
 
 ## Heartbeat
 
@@ -260,8 +261,9 @@ Resposta esperada:
 ```
 
 Se o heartbeat retornar `404`, a instalação local ainda pode estar correta. Esse status indica
-que a API publicada em `APP_BASE` ainda não tem a rota `/api/v1/pabx/asterisk/heartbeat`
-implantada/reiniciada, ou que o backend ativo não está na mesma versão do repositório.
+que a API publicada em `/etc/mnscloud/pabx/api.base` ainda não tem a rota
+`/api/v1/pabx/asterisk/heartbeat` implantada/reiniciada, ou que o backend ativo não está na mesma
+versão do repositório.
 
 ## Diagnóstico
 
