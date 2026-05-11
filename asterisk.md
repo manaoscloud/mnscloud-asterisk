@@ -7,9 +7,8 @@ PJSIP Realtime com MariaDB/ODBC. Ele segue o mesmo padrão operacional dos insta
 FreeSWITCH, Kamailio e OpenSIPS:
 
 - cria/carrega o node UUID em `/etc/mnscloud/pabx/node.uuid`;
-- tenta vincular o node UUID ao `VoipPabxServer` com `VpsEngine = 'asterisk'` via API bootstrap;
-- em instalação interativa, imprime o node UUID e aguarda cadastro manual somente se o bootstrap
-  não localizar um servidor compatível;
+- em instalação interativa, imprime o node UUID e aguarda cadastro manual no `VoipPabxServer`
+  correto com `VpsEngine = 'asterisk'`;
 - valida o cadastro via heartbeat API antes de continuar, quando o operador confirma;
 - não executa SQL direto para vincular o node UUID;
 - preserva arquivos originais com `.bkp`;
@@ -79,19 +78,18 @@ mapeamento é feito em `/etc/asterisk/extconfig.conf`.
 O instalador segue o mesmo conceito do FreeSWITCH para evitar depender de IP público no `.env`:
 
 1. gera/carrega o node UUID logo no início;
-2. tenta vincular o servidor via `POST /api/v1/pabx/asterisk/bootstrap`;
-3. pausa em instalação interativa somente se a API não conseguir localizar um servidor compatível;
+2. pausa em instalação interativa para o operador cadastrar esse UUID no servidor Asterisk correto;
+3. exige que o operador digite `validate`; ENTER vazio não confirma o cadastro;
 4. valida o cadastro via `POST /api/v1/pabx/asterisk/heartbeat`;
 5. se a API retornar `VoipPabxServer.VpsPublicIPv4`, esse IP é usado;
-6. se a validação não ocorrer, o heartbeat usa descoberta HTTPS de IPv4 público;
+6. se a validação não ocorrer e o operador digitar `skip`, o heartbeat usa descoberta HTTPS de IPv4 público;
 7. se o host tiver IPv6 global, o heartbeat também envia `publicIPv6`, `privateIPv6`
    e `localNetIPv6`;
 8. se a descoberta falhar, a configuração NAT do Asterisk permanece sem endereço externo explícito.
 
-O bootstrap usa somente a API. O instalador gera um token por servidor em
-`/etc/mnscloud/pabx/api.token`, envia esse token no bootstrap/heartbeat e a API armazena apenas
-o hash em `VoipPabxServer.VpsApiTokenHash`. O instalador não executa SQL direto para vincular
-`VpsNodeUUID`.
+O cadastro usa a API de heartbeat para validação. O instalador gera um token por servidor em
+`/etc/mnscloud/pabx/api.token`, envia esse token no heartbeat e a API armazena apenas o hash em
+`VoipPabxServer.VpsApiTokenHash`. O instalador não executa SQL direto para vincular `VpsNodeUUID`.
 
 O prompt de confirmação usa `/dev/tty`, então continua funcionando quando o instalador é chamado
 por um wrapper que usa a entrada padrão internamente. Apenas sessões realmente sem terminal de
@@ -228,13 +226,13 @@ em `/run/asterisk`, evitando dependência do script SysV criado por `make config
 ## AMI Control
 
 O instalador cria `/etc/asterisk/manager.conf` para o worker `pabx-control`. A senha forte de
-32 caracteres fica em `/etc/mnscloud/pabx/asterisk-ami.secret` e é enviada no heartbeat/bootstrap
-para a API gravar nos campos de controle do `VoipPabxServer`.
+32 caracteres fica em `/etc/mnscloud/pabx/asterisk-ami.secret` e é enviada no heartbeat para a API
+gravar nos campos de controle do `VoipPabxServer`.
 
 O instalador configura AMI na porta `5038`, cria o usuário `mnscloud`, descobre automaticamente os
 IPs autorizados para o worker/API e gera senha forte local em
-`/etc/mnscloud/pabx/asterisk-ami.secret`. Esses dados são enviados no heartbeat/bootstrap e
-persistidos no cadastro `VoipPabxServer`, sem depender de overrides no `.env`.
+`/etc/mnscloud/pabx/asterisk-ami.secret`. Esses dados são enviados no heartbeat e persistidos no
+cadastro `VoipPabxServer`, sem depender de overrides no `.env`.
 
 ## Heartbeat
 
