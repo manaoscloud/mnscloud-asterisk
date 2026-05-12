@@ -195,6 +195,23 @@ O contexto de entrada dos trunks Asterisk é `trunk-inbound`. Esse contexto deve
 entrada por trunk/DID para ramal, fila, grupo, URA ou destino externo sem depender de contexto por
 PABX.
 
+O `trunk-inbound` não deve materializar uma extensão estática para cada rota. As rotas inbound do
+modelo canônico usam regex em `VoipPabxInboundRoute.VriPattern`, então o Asterisk resolve a chamada
+em tempo real via `ODBC_AST_RESOLVE_INBOUND(${CHANNEL(name)},${EXTEN})`. A função identifica o trunk
+pelo endpoint PJSIP do canal, filtra a rota pelo PABX/tenant/trunk opcional e retorna o destino de
+`Dial()`. Destinos `extension` retornam `PJSIP/<endpoint-do-ramal>`, `external` retorna
+`PJSIP/<numero>@<endpoint-do-trunk>` quando o destino é número livre ou destino externo cadastrado,
+e `group`, `queue` e `ivr` retornam canais `Local/...` para os contextos `mnscloud-group`,
+`mnscloud-queue` e `mnscloud-ivr`. Se um destino externo livre já vier como canal Asterisk
+explícito, por exemplo `PJSIP/...`, ele é usado como informado. Isso evita reload pesado e mantém
+alterações de rota inbound dinâmicas.
+
+Os contextos `mnscloud-group` e `mnscloud-queue` resolvem membros pelo banco e discam os endpoints
+PJSIP materializados no realtime. O `mnscloud-ivr` resolve o áudio inicial e as opções por ODBC,
+mantendo opções de URA também dinâmicas. Para opções de URA com destino externo, o canal de entrada
+original é preservado em `MNSCLOUD_INBOUND_CHANNEL`, permitindo que a opção disque o número externo
+pelo mesmo endpoint de trunk recebido.
+
 ## Arquivos Gerados
 
 O instalador escreve:
