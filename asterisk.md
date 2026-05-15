@@ -82,10 +82,15 @@ O instalador segue o mesmo conceito do FreeSWITCH para evitar depender de IP pú
 3. exige que o operador digite `validate`; ENTER vazio não confirma o cadastro;
 4. valida o cadastro via `POST /api/v1/pabx/asterisk/heartbeat`;
 5. se a API retornar `VoipPabxServer.VpsPublicIPv4`, esse IP é usado;
-6. se a validação não ocorrer e o operador digitar `skip`, o heartbeat usa descoberta HTTPS de IPv4 público;
-7. se o host tiver IPv6 global, o heartbeat também envia `publicIPv6`, `privateIPv6`
+6. se `AST_PUBLIC_IP`/`ASTERISK_PUBLIC_IP` estiver definido com um IPv4 público válido, esse IP é usado;
+7. se a validação não ocorrer e o operador digitar `skip`, o heartbeat usa descoberta HTTPS de IPv4 público;
+8. a descoberta HTTPS pode ser desativada com `AST_AUTO_DISCOVER_PUBLIC_IP=0` ou
+   `ASTERISK_AUTO_DISCOVER_PUBLIC_IP=0`;
+9. o IPv4 local é detectado pela interface global, mas pode ser sobrescrito com
+   `AST_LOCAL_IP`/`ASTERISK_LOCAL_IP`;
+10. se o host tiver IPv6 global, o heartbeat também envia `publicIPv6`, `privateIPv6`
    e `localNetIPv6`;
-8. se a descoberta falhar, a configuração NAT do Asterisk permanece sem endereço externo explícito.
+11. se a descoberta falhar, a configuração NAT do Asterisk permanece sem endereço externo explícito.
 
 O cadastro usa a API de heartbeat para validação. O instalador gera um token por servidor em
 `/etc/mnscloud/pabx/api.token`, envia esse token no heartbeat e a API armazena apenas o hash em
