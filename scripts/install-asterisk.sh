@@ -314,7 +314,9 @@ install_packages_debian() {
   run "apt-get update -y"
   run "apt-get install -y --no-install-recommends build-essential git curl wget ca-certificates gnupg pkg-config autoconf automake libtool bison flex make patch libedit-dev libjansson-dev libxml2-dev libsqlite3-dev uuid-dev libssl-dev libcurl4-openssl-dev libnewt-dev libncurses5-dev libncurses-dev unixodbc unixodbc-dev odbc-mariadb default-mysql-client libbcg729-0 libbcg729-dev sngrep tcpdump ngrep dnsutils traceroute mtr-tiny netcat-openbsd jq"
   if apt-cache show asterisk-codec-bcg729 >/dev/null 2>&1; then
-    run "apt-get install -y --no-install-recommends asterisk-codec-bcg729"
+    if ! run "apt-get install -y --no-install-recommends asterisk-codec-bcg729"; then
+      warn "Optional package asterisk-codec-bcg729 could not be installed. The installer will try to build codec_g729.so via asterisk-g72x + libbcg729."
+    fi
   else
     warn "Package asterisk-codec-bcg729 was not found in the configured repositories. The installer will try to build codec_g729.so via asterisk-g72x + libbcg729."
   fi
