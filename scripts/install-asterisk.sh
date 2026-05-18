@@ -100,8 +100,8 @@ detect_asterisk_os() {
 }
 
 generate_uuid() {
-  [[ -r /proc/sys/kernel/random/uuid ]] && tr '[:lower:]' '[:upper:]' < /proc/sys/kernel/random/uuid && return 0
-  command -v uuidgen >/dev/null 2>&1 && uuidgen | tr '[:lower:]' '[:upper:]'
+  [[ -r /proc/sys/kernel/random/uuid ]] && tr '[:upper:]' '[:lower:]' < /proc/sys/kernel/random/uuid && return 0
+  command -v uuidgen >/dev/null 2>&1 && uuidgen | tr '[:upper:]' '[:lower:]'
 }
 
 generate_secret_32() {
@@ -299,7 +299,7 @@ ensure_node_uuid_file() {
   fi
   compact="${NODE_UUID//-/}"
   [[ "${compact}" =~ ^[0-9A-Fa-f]{32}$ ]] || { err "Node UUID invalido em ${NODE_UUID_FILE}: ${NODE_UUID}"; return 1; }
-  compact="$(echo "${compact}" | tr '[:lower:]' '[:upper:]')"
+  compact="$(echo "${compact}" | tr '[:upper:]' '[:lower:]')"
   NODE_UUID="${compact:0:8}-${compact:8:4}-${compact:12:4}-${compact:16:4}-${compact:20:12}"
   write_file "${NODE_UUID_FILE}" "${NODE_UUID}"
   if getent group asterisk >/dev/null 2>&1; then
