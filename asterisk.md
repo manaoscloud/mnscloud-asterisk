@@ -4,7 +4,7 @@
 
 O instalador `scripts/install-asterisk.sh` provisiona um PABX Asterisk multi-tenant usando
 PJSIP Realtime com MariaDB/ODBC. Ele segue o mesmo padrão operacional dos instaladores
-FreeSWITCH, Kamailio e OpenSIPS:
+FreeSWITCH:
 
 - cria/carrega o node UUID em `/etc/mnscloud/pabx/node.uuid`;
 - em instalação interativa, imprime o node UUID e aguarda cadastro manual no `VoipPabxServer`
@@ -17,8 +17,8 @@ FreeSWITCH, Kamailio e OpenSIPS:
 
 ## Versão
 
-O Asterisk não mantém repositório oficial de pacotes Linux equivalente ao Kamailio/OpenSIPS.
-Por isso o instalador usa o source oficial:
+O Asterisk não mantém um repositório oficial de pacotes Linux alinhado ao modelo operacional que
+precisamos para esta engine PABX. Por isso o instalador usa o source oficial:
 
 ```text
 https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-22-current.tar.gz
@@ -156,6 +156,11 @@ Regras obrigatórias:
   via `ODBC_AST_RESOLVE_INTERNAL(${CHANNEL(name)},${EXTEN})`; a consulta identifica o endpoint
   chamador pelo prefixo `PJSIP/<endpoint>-` do canal e só retorna destino quando chamador e chamado
   pertencem ao mesmo `VoipPabxAccount`/tenant.
+- Todo `Dial()` gerado pelo instalador deve passar pelo subcontexto `mnscloud-dial-result` antes do
+  desligamento final. Esse subcontexto traduz `DIALSTATUS` para causas determinísticas:
+  `CHANUNAVAIL` vira `Hangup(20)`, `NOANSWER` vira `Hangup(19)`, `BUSY` vira `Hangup(17)` e
+  `CONGESTION` vira `Hangup(34)`. Assim, um ramal sem contato PJSIP registrado não fica em ringback
+  vazio quando não há voicemail, encaminhamento ou outro fallback configurado.
 - Hints/BLF devem ser tenant-aware. Quando forem provisionados no realtime, devem usar o endpoint
   técnico completo como extensão (`1100@pabx-dev1.publichost.cloud`) apontando para
   `PJSIP/1100@pabx-dev1.publichost.cloud`, nunca apenas o ramal curto (`1100`) em contexto comum.
@@ -216,6 +221,52 @@ PJSIP materializados no realtime. O `mnscloud-ivr` resolve o áudio inicial e as
 mantendo opções de URA também dinâmicas. Para opções de URA com destino externo, o canal de entrada
 original é preservado em `MNSCLOUD_INBOUND_CHANNEL`, permitindo que a opção disque o número externo
 pelo mesmo endpoint de trunk recebido.
+
+The Asterisk IVR implementation must follow Asterisk dialplan sequencing, not the FreeSWITCH XML
+dialplan model. The installer uses the official `Read()` application as the IVR primitive because it
+can play an optional prompt and store collected digits in a channel variable before the next
+priority resolves the option through ODBC. Do not split prompt playback into `Background()` followed
+by unrelated option logic unless there is a specific feature reason; the standard path is:
+
+```text
+Answer()
+Set(IVR_AUDIO=<ODBC_AST_IVR_AUDIO>)
+Set(IVR_TIMEOUT=<ODBC_AST_IVR_TIMEOUT or 10>)
+Read(IVR_DIGIT,<optional prompt>,1,,1,<timeout>)
+Set(TARGET_DIAL=<ODBC_AST_IVR_OPTION_TARGET>)
+Dial(<TARGET_DIAL>,30)
+Gosub(mnscloud-dial-result,s,1(${DIALSTATUS}))
+```
+
+This keeps Asterisk behavior deterministic: digit capture is completed before the selected target is
+resolved, and every IVR option that reaches `Dial()` is normalized through `mnscloud-dial-result`.
+FreeSWITCH needs a different generated XML shape because its XML conditions are evaluated before
+actions execute; do not copy the FreeSWITCH `execute_extension` workaround into Asterisk.
+
+IVR prompt delivery must respect the same media contract used by the platform:
+
+1. media file delivery mode;
+2. PABX media delivery mode;
+3. tenant `SystemParameter`;
+4. master `SystemParameter`;
+5. default `offline`.
+
+When the effective mode is `offline`, `ODBC_AST_IVR_AUDIO` returns the synchronized local
+`VoipPabxMediaFileSync.VmsDialPath` for the current PABX server. When the effective mode is
+`online`, it returns a stable MNSCloud API media URL:
+
+```text
+<api-base>/api/v1/pabx/media/<node-uuid>/<media-uuid>/content/<filename>?token=<url-encoded-pabx-token>
+```
+
+The API validates the node UUID and PABX API token, checks tenant ownership from the registered PABX
+server, then streams either the API-local file or the configured storage object. This avoids putting
+cloud-storage signed URLs directly into the Asterisk dialplan and keeps URLs free of extra query
+parameters that could confuse prompt playback. The installer loads `res_curl.so` and
+`res_http_media_cache.so` so Asterisk can use HTTP media with the official media cache path behind
+`Read()`. The filename suffix must preserve a real audio extension because PBX media caches and
+format detection rely on a playable file name. Keep generated Asterisk configuration files readable
+only by root/asterisk because they contain the node playback token needed by the engine.
 
 ## Arquivos Gerados
 

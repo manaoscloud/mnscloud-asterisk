@@ -54,6 +54,19 @@ normalize_url() {
   printf "%s" "$value"
 }
 
+sql_literal_escape() {
+  printf "%s" "$1" | sed "s/'/''/g"
+}
+
+url_encode() {
+  local value="$1"
+  if command -v jq >/dev/null 2>&1; then
+    jq -rn --arg v "$value" '$v|@uri'
+    return 0
+  fi
+  printf "%s" "$value"
+}
+
 validate_api_base() {
   [[ "$1" =~ ^https?://[^[:space:]/]+(:[0-9]+)?(/[^[:space:]]*)?$ ]]
 }
@@ -348,6 +361,8 @@ enable_asterisk_modules() {
     pbx_realtime
     cdr_adaptive_odbc
     cel_odbc
+    app_dial
+    app_stack
     format_g729
     format_h264
     func_odbc
@@ -539,7 +554,11 @@ validate_odbc_config() {
 }
 
 write_asterisk_configs() {
-  local cfg
+  local cfg media_api_base_sql media_node_uuid_sql media_token_sql
+  media_api_base_sql="$(sql_literal_escape "${API_BASE}")"
+  media_node_uuid_sql="$(sql_literal_escape "${NODE_UUID}")"
+  media_token_sql="$(sql_literal_escape "$(url_encode "${API_TOKEN}")")"
+
   for cfg in asterisk.conf modules.conf pjsip.conf extconfig.conf sorcery.conf res_odbc.conf func_odbc.conf extensions.conf logger.conf cdr_adaptive_odbc.conf cel_odbc.conf; do
     backup_once "/etc/asterisk/${cfg}"
   done
@@ -572,6 +591,8 @@ load => res_pjsip_outbound_registration.so
 load => res_pjsip_pidf_body_generator.so
 load => res_pjsip_xpidf_body_generator.so
 load => res_pjsip_dialog_info_body_generator.so
+load => res_curl.so
+load => res_http_media_cache.so
 noload => codec_g729a.so
 noload => codec_g729b.so
 noload => chan_sip.so"
@@ -618,7 +639,7 @@ readsql=SELECT IFNULL(VpqTimeoutSeconds, 30) FROM VoipPabxQueue WHERE VpqUUID = 
 
 [AST_IVR_AUDIO]
 dsn=mnscloud
-readsql=SELECT VpiGreetingAudio FROM VoipPabxIvr WHERE VpiUUID = FuncUUIDToBin('\${SQL_ESC(\${ARG1})}') AND VpiDateDeleted IS NULL AND VpiEnabled = 1
+readsql=SELECT CASE WHEN (CASE WHEN media.VmfDeliveryMode IN ('online','offline') THEN media.VmfDeliveryMode WHEN account.VpaMediaDeliveryMode IN ('online','offline') THEN account.VpaMediaDeliveryMode WHEN tenant_param.SprVoipPabxMediaDeliveryModeIsActive = 1 AND NULLIF(TRIM(tenant_param.SprVoipPabxMediaDeliveryMode), '') IS NOT NULL THEN tenant_param.SprVoipPabxMediaDeliveryMode WHEN master_param.SprVoipPabxMediaDeliveryModeIsActive = 1 AND NULLIF(TRIM(master_param.SprVoipPabxMediaDeliveryMode), '') IS NOT NULL THEN master_param.SprVoipPabxMediaDeliveryMode ELSE 'offline' END) = 'online' AND NULLIF(TRIM(media.VmfStorageObjectKey), '') IS NOT NULL AND COALESCE(media.VmfStorageStatus, 'empty') NOT IN ('empty','failed') THEN CONCAT('${media_api_base_sql}/api/v1/pabx/media/${media_node_uuid_sql}/', FuncUUIDFromBin(media.VmfUUID), '/content/', COALESCE(NULLIF(TRIM(media.VmfStoredFilename), ''), CONCAT(FuncUUIDFromBin(media.VmfUUID), '.wav')), '?token=${media_token_sql}') ELSE sync.VmsDialPath END FROM VoipPabxIvr ivr JOIN VoipPabxMediaFile media ON media.VmfUUID = ivr.VoipPabxMediaFileVmfUUID AND media.VmfDateDeleted IS NULL AND media.VmfEnabled = 1 JOIN VoipPabxAccount account ON account.VpaUUID = ivr.VoipPabxAccountVpaUUID LEFT JOIN SystemParameter tenant_param ON tenant_param.UserUsrUUID <=> media.UserUsrUUID AND tenant_param.SprDateDeleted IS NULL LEFT JOIN SystemParameter master_param ON master_param.UserUsrUUID IS NULL AND master_param.SprDateDeleted IS NULL LEFT JOIN VoipPabxMediaFileSync sync ON sync.VoipPabxMediaFileVmfUUID = media.VmfUUID AND sync.VoipPabxServerVpsUUID = account.VoipPabxServerVpsUUID AND sync.VmsDateDeleted IS NULL AND sync.VmsStatus = 'synced' WHERE ivr.VpiUUID = FuncUUIDToBin('\${SQL_ESC(\${ARG1})}') AND ivr.VpiDateDeleted IS NULL AND ivr.VpiEnabled = 1 LIMIT 1
 
 [AST_IVR_TIMEOUT]
 dsn=mnscloud
@@ -684,6 +705,7 @@ exten => _X.,1,NoOp(mnscloud authenticated call from \${CHANNEL(name)} to \${EXT
  same => n,Set(CDR(userfield)=\${MNSCLOUD_RECORDING_PATH})
  same => n,MixMonitor(\${MNSCLOUD_RECORDING_PATH},b)
  same => n(dial),Dial(\${TARGET_DIAL},30)
+ same => n,Gosub(mnscloud-dial-result,s,1(\${DIALSTATUS}))
  same => n,Hangup()
  same => n(notfound),Hangup(404)
 
@@ -698,6 +720,7 @@ exten => _X.,1,NoOp(mnscloud inbound trunk call from \${CHANNEL(name)} to \${EXT
  same => n,Set(CDR(userfield)=\${MNSCLOUD_RECORDING_PATH})
  same => n,MixMonitor(\${MNSCLOUD_RECORDING_PATH},b)
  same => n,Dial(\${TARGET_DIAL},30)
+ same => n,Gosub(mnscloud-dial-result,s,1(\${DIALSTATUS}))
  same => n,Hangup()
  same => n(blacklisted),Hangup(\${BLACKLIST_CAUSE})
  same => n(notfound),Hangup(404)
@@ -708,6 +731,7 @@ exten => _.,1,NoOp(mnscloud group \${EXTEN})
  same => n,Set(GROUP_TIMEOUT=\${ODBC_AST_GROUP_TIMEOUT(\${EXTEN})})
  same => n,GotoIf(\$[\"\${GROUP_DIAL}\" = \"\"]?notfound)
  same => n,Dial(\${GROUP_DIAL},\${IF(\$[\"\${GROUP_TIMEOUT}\" = \"\"]?30:\${GROUP_TIMEOUT})})
+ same => n,Gosub(mnscloud-dial-result,s,1(\${DIALSTATUS}))
  same => n,Hangup()
  same => n(notfound),Hangup(404)
 
@@ -717,6 +741,7 @@ exten => _.,1,NoOp(mnscloud queue \${EXTEN})
  same => n,Set(QUEUE_TIMEOUT=\${ODBC_AST_QUEUE_TIMEOUT(\${EXTEN})})
  same => n,GotoIf(\$[\"\${QUEUE_DIAL}\" = \"\"]?notfound)
  same => n,Dial(\${QUEUE_DIAL},\${IF(\$[\"\${QUEUE_TIMEOUT}\" = \"\"]?30:\${QUEUE_TIMEOUT})})
+ same => n,Gosub(mnscloud-dial-result,s,1(\${DIALSTATUS}))
  same => n,Hangup()
  same => n(notfound),Hangup(404)
 
@@ -724,13 +749,31 @@ exten => _.,1,NoOp(mnscloud queue \${EXTEN})
 exten => _.,1,NoOp(mnscloud ivr \${EXTEN})
  same => n,Answer()
  same => n,Set(IVR_AUDIO=\${ODBC_AST_IVR_AUDIO(\${EXTEN})})
- same => n,ExecIf(\$[\"\${IVR_AUDIO}\" != \"\"]?Background(\${IVR_AUDIO}))
- same => n,Read(IVR_DIGIT,,1,,1,\${ODBC_AST_IVR_TIMEOUT(\${EXTEN})})
+ same => n,Set(IVR_TIMEOUT=\${ODBC_AST_IVR_TIMEOUT(\${EXTEN})})
+ same => n,ExecIf(\$[\"\${IVR_TIMEOUT}\" = \"\"]?Set(IVR_TIMEOUT=10))
+ same => n,GotoIf(\$[\"\${IVR_AUDIO}\" = \"\"]?read_no_prompt)
+ same => n,Read(IVR_DIGIT,\${IVR_AUDIO},1,,1,\${IVR_TIMEOUT})
+ same => n,Goto(resolve)
+ same => n(read_no_prompt),Read(IVR_DIGIT,,1,,1,\${IVR_TIMEOUT})
+ same => n(resolve),NoOp(mnscloud ivr digit \${IVR_DIGIT} for \${EXTEN})
  same => n,Set(TARGET_DIAL=\${ODBC_AST_IVR_OPTION_TARGET(\${EXTEN},\${IVR_DIGIT},\${MNSCLOUD_INBOUND_CHANNEL})})
  same => n,GotoIf(\$[\"\${TARGET_DIAL}\" = \"\"]?notfound)
  same => n,Dial(\${TARGET_DIAL},30)
+ same => n,Gosub(mnscloud-dial-result,s,1(\${DIALSTATUS}))
  same => n,Hangup()
- same => n(notfound),Hangup(404)"
+ same => n(notfound),Hangup(404)
+
+[mnscloud-dial-result]
+exten => s,1,NoOp(mnscloud dial result \${ARG1})
+ same => n,GotoIf(\$[\"\${ARG1}\" = \"BUSY\"]?busy)
+ same => n,GotoIf(\$[\"\${ARG1}\" = \"CHANUNAVAIL\"]?unavailable)
+ same => n,GotoIf(\$[\"\${ARG1}\" = \"CONGESTION\"]?congestion)
+ same => n,GotoIf(\$[\"\${ARG1}\" = \"NOANSWER\"]?noanswer)
+ same => n,Return()
+ same => n(busy),Hangup(17)
+ same => n(unavailable),Hangup(20)
+ same => n(congestion),Hangup(34)
+ same => n(noanswer),Hangup(19)"
 
   write_file "/etc/asterisk/cdr_adaptive_odbc.conf" "[mnscloud]
 connection=mnscloud
