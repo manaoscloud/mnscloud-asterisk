@@ -14,6 +14,24 @@ contract. It can run on MNSCloud, customer, or partner infrastructure.
 - Do not commit secrets, customer data, production infrastructure values, provider credentials, or
   private business rules.
 
+## Contract
+
+- Product/runtime: `mnscloud-asterisk`
+- Project directory: `/opt/mnscloud/mnscloud-asterisk`
+- Installer: `scripts/install-asterisk.sh`
+- Service: `asterisk.service`
+- Runtime user: `asterisk`
+- Local state prefix: `/etc/mnscloud/pabx`
+- Node UUID: `/etc/mnscloud/pabx/node.uuid`
+- API token: `/etc/mnscloud/pabx/api.token`
+- API base URL: `/etc/mnscloud/pabx/api.base`
+- Database config: `/etc/mnscloud/pabx/db.conf`
+- AMI secret: `/etc/mnscloud/pabx/asterisk-ami.secret`
+- Asterisk config directory: `/etc/asterisk`
+- Asterisk state directory: `/var/lib/asterisk`
+- Asterisk log directory: `/var/log/asterisk`
+- Recording spool: `/var/spool/asterisk/monitor/mnscloud`
+
 ## Install
 
 Install GitHub CLI if needed:
