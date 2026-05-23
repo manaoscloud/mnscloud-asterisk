@@ -585,6 +585,7 @@ autoload=yes
 preload => res_odbc.so
 preload => res_config_odbc.so
 load => pbx_realtime.so
+load => app_queue.so
 load => res_pjsip_pubsub.so
 load => res_pjsip_exten_state.so
 load => res_pjsip_outbound_registration.so
@@ -659,7 +660,9 @@ ps_contacts => odbc,mnscloud,AsteriskContact
 ps_domain_aliases => odbc,mnscloud,AsteriskDomainAlias
 ps_endpoint_id_ips => odbc,mnscloud,AsteriskEndpointIdentify
 ps_registrations => odbc,mnscloud,AsteriskRegistration
-extensions => odbc,mnscloud,AsteriskExtension"
+extensions => odbc,mnscloud,AsteriskExtension
+queues => odbc,mnscloud,AsteriskQueue
+queue_members => odbc,mnscloud,AsteriskQueueMember"
 
   write_file "/etc/asterisk/sorcery.conf" "[res_pjsip]
 global=realtime,ps_globals
@@ -737,12 +740,15 @@ exten => _.,1,NoOp(mnscloud group \${EXTEN})
 
 [mnscloud-queue]
 exten => _.,1,NoOp(mnscloud queue \${EXTEN})
- same => n,Set(QUEUE_DIAL=\${ODBC_AST_QUEUE_DIAL(\${EXTEN})})
  same => n,Set(QUEUE_TIMEOUT=\${ODBC_AST_QUEUE_TIMEOUT(\${EXTEN})})
- same => n,GotoIf(\$[\"\${QUEUE_DIAL}\" = \"\"]?notfound)
- same => n,Dial(\${QUEUE_DIAL},\${IF(\$[\"\${QUEUE_TIMEOUT}\" = \"\"]?30:\${QUEUE_TIMEOUT})})
- same => n,Gosub(mnscloud-dial-result,s,1(\${DIALSTATUS}))
+ same => n,ExecIf(\$[\"\${QUEUE_TIMEOUT}\" = \"\"]?Set(QUEUE_TIMEOUT=30))
+ same => n,Queue(mnscloud-\${TOLOWER(\${EXTEN})},tT,,,\${QUEUE_TIMEOUT})
+ same => n,GotoIf(\$[\"\${QUEUESTATUS}\" = \"TIMEOUT\"]?timeout)
+ same => n,GotoIf(\$[\"\${QUEUESTATUS}\" = \"JOINEMPTY\"]?unavailable)
+ same => n,GotoIf(\$[\"\${QUEUESTATUS}\" = \"LEAVEEMPTY\"]?unavailable)
  same => n,Hangup()
+ same => n(timeout),Hangup(19)
+ same => n(unavailable),Hangup(20)
  same => n(notfound),Hangup(404)
 
 [mnscloud-ivr]

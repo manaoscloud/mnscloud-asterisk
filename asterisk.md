@@ -216,11 +216,14 @@ e `group`, `queue` e `ivr` retornam canais `Local/...` para os contextos `mnsclo
 explícito, por exemplo `PJSIP/...`, ele é usado como informado. Isso evita reload pesado e mantém
 alterações de rota inbound dinâmicas.
 
-Os contextos `mnscloud-group` e `mnscloud-queue` resolvem membros pelo banco e discam os endpoints
-PJSIP materializados no realtime. O `mnscloud-ivr` resolve o áudio inicial e as opções por ODBC,
-mantendo opções de URA também dinâmicas. Para opções de URA com destino externo, o canal de entrada
-original é preservado em `MNSCLOUD_INBOUND_CHANNEL`, permitindo que a opção disque o número externo
-pelo mesmo endpoint de trunk recebido.
+O contexto `mnscloud-group` resolve membros pelo banco e disca os endpoints PJSIP materializados no
+realtime. O contexto `mnscloud-queue` usa o `app_queue` nativo com filas realtime
+`AsteriskQueue`/`AsteriskQueueMember`; quando um ramal membro tem `VoipPabxQueueAgent`, o status
+`LOGGED_OUT`, `AVAILABLE` ou `PAUSED` controla se o membro entra na fila e se entra pausado. Ramais
+sem agente continuam como membros fixos para compatibilidade. O `mnscloud-ivr` resolve o áudio
+inicial e as opções por ODBC, mantendo opções de URA também dinâmicas. Para opções de URA com
+destino externo, o canal de entrada original é preservado em `MNSCLOUD_INBOUND_CHANNEL`, permitindo
+que a opção disque o número externo pelo mesmo endpoint de trunk recebido.
 
 The Asterisk IVR implementation must follow Asterisk dialplan sequencing, not the FreeSWITCH XML
 dialplan model. The installer uses the official `Read()` application as the IVR primitive because it
