@@ -53,4 +53,19 @@ cd /opt/mnscloud/mnscloud-asterisk
 sudo bash scripts/install-asterisk.sh
 ```
 
+The recommended production flow is to create the Asterisk PABX server in MNSCloud and use
+**Generate Install Command**. The platform returns a visible-once runtime token, stores only its hash,
+and generates a command that clones/updates this repository and runs:
+
+```bash
+sudo bash scripts/install-asterisk.sh \
+  --api-base <api_base> \
+  --node-uuid <node_uuid> \
+  --runtime-token <visible_once_runtime_token>
+```
+
+Asterisk realtime database credentials remain local server configuration. Provide them
+interactively, through `/etc/mnscloud/pabx/db.conf`, or through the optional `--db-host`, `--db-port`,
+`--db-name`, `--db-user`, and `--db-pass` installer flags.
+
 See `asterisk.md` and `SECURITY.md` for details.

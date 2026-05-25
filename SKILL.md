@@ -20,6 +20,8 @@ monorepo at runtime.
 - Node UUIDs generated, persisted, displayed, or sent by installers must be normalized to lowercase.
 - Local secrets must be generated on the target host and stored with restrictive permissions.
 - Permanent provider credentials stay in the API/control plane.
+- UI-generated PABX install commands may expose the server runtime token only once. The API must
+  store only its hash, and regenerating the command must replace the previous token.
 
 ## Contract
 
@@ -27,6 +29,8 @@ monorepo at runtime.
 - Local installer: `scripts/install-asterisk.sh`
 - Runtime API consumer: MNSCloud PABX Asterisk endpoints under `/api/v1/pabx/asterisk/*`
 - Local state prefix: `/etc/mnscloud/pabx`
+- Install flags: `--api-base`, `--node-uuid`, `--runtime-token`/`--install-token`, and optional
+  `--db-host`, `--db-port`, `--db-name`, `--db-user`, `--db-pass`.
 
 ## Checklist
 

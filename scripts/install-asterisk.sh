@@ -41,6 +41,52 @@ ASTERISK_G72X_BUNDLED_SOURCE_DIR="${ASTERISK_G72X_BUNDLED_SOURCE_DIR:-${PROJECT_
 ASTERISK_G72X_BUILD_DIR="${ASTERISK_G72X_BUILD_DIR:-/usr/src/mnscloud-asterisk-g72x}"
 ASTERISK_EXTERNAL_INCLUDE_DIR="${ASTERISK_EXTERNAL_INCLUDE_DIR:-/usr/src/mnscloud-asterisk-include}"
 
+parse_cli_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --api-base)
+        API_BASE="${2:-}"
+        shift 2
+        ;;
+      --node-uuid)
+        NODE_UUID="${2:-}"
+        shift 2
+        ;;
+      --runtime-token | --install-token)
+        API_TOKEN="${2:-}"
+        shift 2
+        ;;
+      --db-host)
+        AST_DB_HOST="${2:-}"
+        shift 2
+        ;;
+      --db-port)
+        AST_DB_PORT="${2:-}"
+        shift 2
+        ;;
+      --db-name)
+        AST_DB_NAME="${2:-}"
+        shift 2
+        ;;
+      --db-user)
+        AST_DB_USER="${2:-}"
+        shift 2
+        ;;
+      --db-pass)
+        AST_DB_PASS="${2:-}"
+        shift 2
+        ;;
+      --dry-run)
+        shift
+        ;;
+      *)
+        err "Unknown argument: $1"
+        exit 2
+        ;;
+    esac
+  done
+}
+
 load_env_file() {
   if [[ -f "${ENV_FILE}" ]]; then
     info "Loading variables from ${ENV_FILE}"
@@ -85,7 +131,12 @@ ensure_api_base_file() {
   dir="$(dirname "${API_BASE_FILE}")"
   [[ -d "$dir" ]] || run "mkdir -p '${dir}'"
 
-  if [[ -f "${API_BASE_FILE}" ]]; then
+  if [[ -n "${API_BASE}" ]]; then
+    API_BASE="$(normalize_url "${API_BASE}")"
+    validate_api_base "${API_BASE}" || { err "URL base da API invalida: ${API_BASE}"; return 1; }
+    write_file "${API_BASE_FILE}" "${API_BASE}"
+    ok "API base saved to ${API_BASE_FILE}: ${API_BASE}"
+  elif [[ -f "${API_BASE_FILE}" ]]; then
     value="$(tr -d '[:space:]' < "${API_BASE_FILE}")"
     API_BASE="$(normalize_url "$value")"
     ok "API base carregada de ${API_BASE_FILE}: ${API_BASE}"
@@ -282,7 +333,10 @@ ensure_api_token_file() {
   local dir
   dir="$(dirname "${API_TOKEN_FILE}")"
   [[ -d "$dir" ]] || run "mkdir -p '${dir}'"
-  if [[ -f "${API_TOKEN_FILE}" ]]; then
+  if [[ -n "${API_TOKEN}" ]]; then
+    write_file "${API_TOKEN_FILE}" "${API_TOKEN}"
+    ok "PABX API token saved to ${API_TOKEN_FILE}"
+  elif [[ -f "${API_TOKEN_FILE}" ]]; then
     API_TOKEN="$(tr -d '[:space:]' < "${API_TOKEN_FILE}")"
     ok "PABX API token loaded from ${API_TOKEN_FILE}"
   else
@@ -302,7 +356,10 @@ ensure_node_uuid_file() {
   local dir compact
   dir="$(dirname "${NODE_UUID_FILE}")"
   [[ -d "$dir" ]] || run "mkdir -p '${dir}'"
-  if [[ -f "${NODE_UUID_FILE}" ]]; then
+  if [[ -n "${NODE_UUID}" ]]; then
+    write_file "${NODE_UUID_FILE}" "${NODE_UUID}"
+    ok "Node UUID saved to ${NODE_UUID_FILE}: ${NODE_UUID}"
+  elif [[ -f "${NODE_UUID_FILE}" ]]; then
     NODE_UUID="$(tr -d '[:space:]' < "${NODE_UUID_FILE}")"
     ok "Node UUID loaded from ${NODE_UUID_FILE}: ${NODE_UUID}"
   else
@@ -1143,6 +1200,7 @@ validate_and_start() {
 
 main() {
   require_root
+  parse_cli_args "$@"
   echo "asterisk        PABX - Asterisk 22.9.x LTS Multi-Tenant (official repository)"
   echo "Mode: $([[ "$DRY_RUN" == true ]] && echo DRY-RUN || echo APPLY)"
   echo "Log:  ${LOG_FILE}"
