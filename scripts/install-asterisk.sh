@@ -1142,17 +1142,28 @@ wait_for_node_registration() {
   info "Node UUID for this Asterisk host: ${NODE_UUID}"
   info "Register this exact Node UUID in the correct VoipPabxServer Asterisk record before continuing."
 
-  if ! [[ -r /dev/tty && -w /dev/tty ]]; then
+  ensure_curl_for_validation
+
+  if [[ -n "${API_TOKEN}" ]]; then
+    info "Validating generated Asterisk install credential with the API."
+    if heartbeat; then
+      return 0
+    fi
+    warn "Automatic API validation failed; falling back to interactive validation."
+  fi
+
+  if $DRY_RUN || ! [[ -t 0 && -r /dev/tty && -w /dev/tty ]]; then
     warn "Interactive terminal is unavailable at /dev/tty; skipping Node UUID registration wait."
     return 1
   fi
 
-  ensure_curl_for_validation
-
   local answer
   while true; do
     printf "%s\n" "After registering the Node UUID in the platform, type 'validate' to test it, or type 'skip' to continue without validation: " >/dev/tty
-    IFS= read -r answer </dev/tty
+    if ! IFS= read -r answer </dev/tty; then
+      warn "Could not read from /dev/tty; skipping Node UUID registration wait."
+      return 1
+    fi
     if [[ "${answer,,}" == "skip" ]]; then
       warn "Node UUID registration was not validated. The installer will try HTTPS discovery in the final heartbeat."
       return 1
