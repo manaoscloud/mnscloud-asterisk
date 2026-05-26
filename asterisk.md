@@ -365,6 +365,7 @@ Para SIP:
 
 ```bash
 sngrep
+ping -c 3 <sip-host>
 tcpdump -ni any port 5060
 ngrep -d any -W byline port 5060
 ```
