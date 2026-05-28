@@ -708,15 +708,15 @@ dsn=mnscloud
 readsql=SELECT CASE WHEN opt.VioRouteType = 'extension' AND target.id IS NOT NULL THEN CONCAT('PJSIP/', target.id) WHEN opt.VioRouteType = 'external' AND NULLIF(TRIM(opt.VioRouteTargetValue), '') IS NOT NULL AND trunk_endpoint.id IS NOT NULL THEN CASE WHEN TRIM(opt.VioRouteTargetValue) REGEXP '^[A-Za-z]+/' THEN TRIM(opt.VioRouteTargetValue) ELSE CONCAT('PJSIP/', TRIM(opt.VioRouteTargetValue), '@', trunk_endpoint.id) END WHEN opt.VioRouteType = 'external' AND x.VpxUUID IS NOT NULL AND trunk_endpoint.id IS NOT NULL THEN CONCAT('PJSIP/', COALESCE(NULLIF(TRIM(x.VpxDialPrefix), ''), ''), x.VpxNumber, '@', trunk_endpoint.id) WHEN opt.VioRouteType = 'group' AND grp.VpgUUID IS NOT NULL THEN CONCAT('Local/', opt.VioRouteTargetUUID, '@mnscloud-group') WHEN opt.VioRouteType = 'queue' AND q.VpqUUID IS NOT NULL THEN CONCAT('Local/', opt.VioRouteTargetUUID, '@mnscloud-queue') WHEN opt.VioRouteType = 'ivr' AND next_ivr.VpiUUID IS NOT NULL THEN CONCAT('Local/', opt.VioRouteTargetUUID, '@mnscloud-ivr') ELSE NULL END FROM VoipPabxIvrOption opt LEFT JOIN AsteriskEndpoint trunk_endpoint ON '\${SQL_ESC(\${ARG3})}' LIKE CONCAT('PJSIP/', trunk_endpoint.id, '-%') LEFT JOIN VoipPabxExtension target_ext ON opt.VioRouteType = 'extension' AND target_ext.VpeUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND target_ext.UserUsrUUID <=> opt.UserUsrUUID AND target_ext.VpeDateDeleted IS NULL AND target_ext.VpeEnabled = 1 LEFT JOIN AsteriskEndpoint target ON target.VoipPabxExtensionVpeUUID = target_ext.VpeUUID LEFT JOIN VoipPabxExternal x ON opt.VioRouteType = 'external' AND x.VpxUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND x.UserUsrUUID <=> opt.UserUsrUUID AND x.VpxDateDeleted IS NULL AND x.VpxEnabled = 1 LEFT JOIN VoipPabxGroup grp ON opt.VioRouteType = 'group' AND grp.VpgUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND grp.UserUsrUUID <=> opt.UserUsrUUID AND grp.VpgDateDeleted IS NULL AND grp.VpgEnabled = 1 LEFT JOIN VoipPabxQueue q ON opt.VioRouteType = 'queue' AND q.VpqUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND q.UserUsrUUID <=> opt.UserUsrUUID AND q.VpqDateDeleted IS NULL AND q.VpqEnabled = 1 LEFT JOIN VoipPabxIvr next_ivr ON opt.VioRouteType = 'ivr' AND next_ivr.VpiUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND next_ivr.UserUsrUUID <=> opt.UserUsrUUID AND next_ivr.VpiDateDeleted IS NULL AND next_ivr.VpiEnabled = 1 WHERE opt.VoipPabxIvrVpiUUID = FuncUUIDToBin('\${SQL_ESC(\${ARG1})}') AND opt.VioDigit = '\${SQL_ESC(\${ARG2})}' AND opt.VioDateDeleted IS NULL AND opt.VioEnabled = 1 LIMIT 1"
 
   write_file "/etc/asterisk/extconfig.conf" "[settings]
-ps_globals => odbc,mnscloud,AsteriskGlobal
-ps_transports => odbc,mnscloud,AsteriskTransport
-ps_endpoints => odbc,mnscloud,AsteriskEndpoint
-ps_auths => odbc,mnscloud,AsteriskAuth
-ps_aors => odbc,mnscloud,AsteriskAor
-ps_contacts => odbc,mnscloud,AsteriskContact
-ps_domain_aliases => odbc,mnscloud,AsteriskDomainAlias
-ps_endpoint_id_ips => odbc,mnscloud,AsteriskEndpointIdentify
-ps_registrations => odbc,mnscloud,AsteriskRegistration
+ps_globals => odbc,mnscloud,AsteriskRealtimeGlobal
+ps_transports => odbc,mnscloud,AsteriskRealtimeTransport
+ps_endpoints => odbc,mnscloud,AsteriskRealtimeEndpoint
+ps_auths => odbc,mnscloud,AsteriskRealtimeAuth
+ps_aors => odbc,mnscloud,AsteriskRealtimeAor
+ps_contacts => odbc,mnscloud,AsteriskRealtimeContact
+ps_domain_aliases => odbc,mnscloud,AsteriskRealtimeDomainAlias
+ps_endpoint_id_ips => odbc,mnscloud,AsteriskRealtimeEndpointIdentify
+ps_registrations => odbc,mnscloud,AsteriskRealtimeRegistration
 extensions => odbc,mnscloud,AsteriskExtension
 queues => odbc,mnscloud,AsteriskQueue
 queue_members => odbc,mnscloud,AsteriskQueueMember"

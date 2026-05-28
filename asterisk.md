@@ -190,6 +190,10 @@ realtime do Asterisk quando o recurso é criado, alterado ou removido:
 - `AsteriskRegistration`: criado quando `authMode = register`, `registerEnabled = true` e há
   usuário/senha.
 
+O Asterisk consulta esses objetos por views `AsteriskRealtime*` mapeadas em
+`/etc/asterisk/extconfig.conf`. As views expõem apenas colunas PJSIP e ocultam metadados internos
+como UUIDs binários, evitando erros ODBC de leitura em consultas realtime `SELECT *`.
+
 O contrato de trunk é engine-aware, mas a engine não é escolhida no trunk. A entidade canônica é
 `VoipPabxTrunk`, e a engine é derivada do `VoipPabxServer` vinculado ao PABX. Cada engine materializa
 apenas seus artefatos runtime. Para Asterisk, o renderer da API grava as tabelas `Asterisk*`; para
