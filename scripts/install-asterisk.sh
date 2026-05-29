@@ -620,7 +620,7 @@ write_asterisk_configs() {
   media_node_uuid_sql="$(sql_literal_escape "${NODE_UUID}")"
   media_token_sql="$(sql_literal_escape "$(url_encode "${API_TOKEN}")")"
 
-  for cfg in asterisk.conf modules.conf pjsip.conf extconfig.conf sorcery.conf res_odbc.conf func_odbc.conf extensions.conf logger.conf cdr_adaptive_odbc.conf cel_odbc.conf; do
+  for cfg in asterisk.conf modules.conf pjsip.conf extconfig.conf sorcery.conf res_odbc.conf func_odbc.conf extensions.conf queues.conf logger.conf cdr_adaptive_odbc.conf cel_odbc.conf; do
     backup_once "/etc/asterisk/${cfg}"
   done
 
@@ -646,6 +646,7 @@ autoload=yes
 preload => res_odbc.so
 preload => res_config_odbc.so
 load => pbx_realtime.so
+load => res_musiconhold.so
 load => app_queue.so
 load => res_pjsip_pubsub.so
 load => res_pjsip_exten_state.so
@@ -841,6 +842,11 @@ exten => s,1,NoOp(mnscloud dial result \${ARG1})
  same => n(unavailable),Hangup(20)
  same => n(congestion),Hangup(34)
  same => n(noanswer),Hangup(19)"
+
+  write_file "/etc/asterisk/queues.conf" "[general]
+persistentmembers = no
+autofill = yes
+shared_lastcall = yes"
 
   write_file "/etc/asterisk/cdr_adaptive_odbc.conf" "[mnscloud]
 connection=mnscloud
@@ -1199,6 +1205,7 @@ validate_and_start() {
       run "asterisk -rx 'module show like res_sorcery_realtime' || true"
       run "asterisk -rx 'module show like res_pjsip' || true"
       run "asterisk -rx 'module show like func_odbc' || true"
+      run "asterisk -rx 'module show like res_musiconhold' || true"
       run "asterisk -rx 'module show like app_queue' || true"
       run "asterisk -rx 'module show like g729' || true"
       run "asterisk -rx 'module show like h264' || true"
