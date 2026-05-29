@@ -296,9 +296,11 @@ O instalador escreve:
 ```
 
 O `logger.conf` gerado pelo instalador preserva o arquivo original com `.bkp` e recria uma
-configuração limpa com `console`, `messages` e `full` ativos. O arquivo
-`/var/log/asterisk/full` recebe `notice`, `warning`, `error`, `debug` e `verbose`, para facilitar
-diagnóstico de PJSIP/realtime sem depender somente do journal.
+configuração limpa com `console`, `messages`, `full` e `security` ativos. Os arquivos
+`/var/log/asterisk/full`, `/var/log/asterisk/messages` e `/var/log/asterisk/security` são criados
+antes do start do serviço. O arquivo `/var/log/asterisk/full` recebe `notice`, `warning`, `error`,
+`debug`, `verbose` e `security`, para facilitar diagnóstico de PJSIP/realtime sem depender somente
+do journal e para que o CrowdSec consiga consumir eventos oficiais de segurança do Asterisk.
 
 O serviço é controlado por um unit systemd nativo gerado pelo instalador. O runtime/socket fica
 em `/run/asterisk`, evitando dependência do script SysV criado por `make config`.

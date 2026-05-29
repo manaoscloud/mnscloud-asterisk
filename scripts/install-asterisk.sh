@@ -656,6 +656,7 @@ load => res_pjsip_xpidf_body_generator.so
 load => res_pjsip_dialog_info_body_generator.so
 load => res_curl.so
 load => res_http_media_cache.so
+load => res_security_log.so
 noload => codec_g729a.so
 noload => codec_g729b.so
 noload => chan_sip.so"
@@ -862,8 +863,13 @@ dateformat=%F %T
 
 [logfiles]
 console => notice,warning,error
-messages => notice,warning,error,verbose
-full => notice,warning,error,debug,verbose"
+messages => notice,warning,error,verbose,security
+full => notice,warning,error,debug,verbose,security
+security => security"
+
+  run "touch /var/log/asterisk/full /var/log/asterisk/messages /var/log/asterisk/security"
+  run "chown asterisk:asterisk /var/log/asterisk/full /var/log/asterisk/messages /var/log/asterisk/security"
+  run "chmod 0644 /var/log/asterisk/full /var/log/asterisk/messages /var/log/asterisk/security"
 
   local local_ip permits permit_line
   local_ip="$(hostname -I 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i !~ /:/) { print $i; exit }}')"
