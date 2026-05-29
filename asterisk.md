@@ -377,6 +377,6 @@ ngrep -d any -W byline port 5060
 ## Próximos Passos
 
 O instalador entrega a base Asterisk Realtime. A sincronização de entidades canônicas
-(`VoipPabxExtension`, `VoipPabxTrunk`, `VoipPabxInboundRoute`, `VoipPabxOutboundRoute`) para
+(`VoipPabxExtension`, `VoipPabxTrunk`, `VoipPabxInboundRoute` e regras de `VoipPabxDialPlanRule`) para
 as tabelas `Asterisk*` deve respeitar o contrato multi-tenant acima e acontecer pelas procedures
 do banco, não por scripts operacionais manuais.
