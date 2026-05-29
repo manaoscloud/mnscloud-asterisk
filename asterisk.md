@@ -349,13 +349,15 @@ versão do repositório.
 systemctl status asterisk --no-pager
 asterisk -V
 asterisk -rx "core show uptime"
-asterisk -rx "odbc show"
 asterisk -rx "module show like res_odbc"
 asterisk -rx "module show like res_config_odbc"
 asterisk -rx "module show like res_sorcery_realtime"
 asterisk -rx "module show like res_pjsip"
+asterisk -rx "module show like func_odbc"
+asterisk -rx "module show like app_queue"
 asterisk -rx "module show like g729"
 asterisk -rx "module show like h264"
+asterisk -rx "core show applications like Queue"
 asterisk -rx "core show codecs audio" | grep -i g729
 asterisk -rx "core show translation" | grep -i g729
 asterisk -rx "core show codecs video" | grep -i h264

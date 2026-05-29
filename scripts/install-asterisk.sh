@@ -186,7 +186,11 @@ ensure_control_secret() {
     AST_CONTROL_SECRET="$(generate_secret_32)"
     write_file "${AST_CONTROL_SECRET_FILE}" "${AST_CONTROL_SECRET}"
   fi
-  run "chown root:asterisk '${AST_CONTROL_SECRET_FILE}' || chown root:root '${AST_CONTROL_SECRET_FILE}'"
+  if getent group asterisk >/dev/null 2>&1; then
+    run "chown root:asterisk '${AST_CONTROL_SECRET_FILE}'"
+  else
+    run "chown root:root '${AST_CONTROL_SECRET_FILE}'"
+  fi
   run "chmod 0640 '${AST_CONTROL_SECRET_FILE}'"
 }
 
@@ -1190,13 +1194,15 @@ validate_and_start() {
   for attempt in {1..20}; do
     if asterisk -rx 'core show uptime' >/dev/null 2>&1; then
       run "asterisk -rx 'core show uptime'"
-      run "asterisk -rx 'odbc show' || true"
       run "asterisk -rx 'module show like res_odbc' || true"
       run "asterisk -rx 'module show like res_config_odbc' || true"
       run "asterisk -rx 'module show like res_sorcery_realtime' || true"
       run "asterisk -rx 'module show like res_pjsip' || true"
+      run "asterisk -rx 'module show like func_odbc' || true"
+      run "asterisk -rx 'module show like app_queue' || true"
       run "asterisk -rx 'module show like g729' || true"
       run "asterisk -rx 'module show like h264' || true"
+      run "asterisk -rx 'core show applications like Queue' || true"
       run "asterisk -rx 'core show codecs audio' | grep -i g729 || true"
       run "asterisk -rx 'core show codecs video' | grep -i h264 || true"
       return 0
