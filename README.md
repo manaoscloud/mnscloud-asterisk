@@ -19,6 +19,7 @@ contract. It can run on MNSCloud, customer, or partner infrastructure.
 - Product/runtime: `mnscloud-asterisk`
 - Project directory: `/opt/mnscloud/mnscloud-asterisk`
 - Installer: `scripts/install-asterisk.sh`
+- Shared package installer: `mnscloud-runtime-kit`
 - Service: `asterisk.service`
 - Runtime user: `asterisk`
 - Local state prefix: `/etc/mnscloud/pabx`

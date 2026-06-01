@@ -40,6 +40,10 @@ ASTERISK_G72X_SOURCE_REF="${ASTERISK_G72X_SOURCE_REF:-55a7b8246c8ad3f32e50a03352
 ASTERISK_G72X_BUNDLED_SOURCE_DIR="${ASTERISK_G72X_BUNDLED_SOURCE_DIR:-${PROJECT_ROOT}/codecs/asterisk-g72x}"
 ASTERISK_G72X_BUILD_DIR="${ASTERISK_G72X_BUILD_DIR:-/usr/src/mnscloud-asterisk-g72x}"
 ASTERISK_EXTERNAL_INCLUDE_DIR="${ASTERISK_EXTERNAL_INCLUDE_DIR:-/usr/src/mnscloud-asterisk-include}"
+ASTERISK_RUNTIME_KIT_DIR="${ASTERISK_RUNTIME_KIT_DIR:-/opt/mnscloud/runtime-kit}"
+ASTERISK_RUNTIME_KIT_REPO_URL="${ASTERISK_RUNTIME_KIT_REPO_URL:-https://github.com/manaoscloud/mnscloud-runtime-kit.git}"
+ASTERISK_RUNTIME_KIT_CHANNEL="${ASTERISK_RUNTIME_KIT_CHANNEL:-stable}"
+ASTERISK_RUNTIME_KIT_REF="${ASTERISK_RUNTIME_KIT_REF:-}"
 
 parse_cli_args() {
   while [[ $# -gt 0 ]]; do
@@ -161,6 +165,47 @@ detect_asterisk_os() {
   esac
   err "Unsupported operating system for Asterisk. Supported in this version: Debian 12/13."
   exit 2
+}
+
+resolve_runtime_kit_ref() {
+  local kit_dir="$1" channel="$2" manifest ref
+  manifest="$(git -C "$kit_dir" show "origin/main:releases/manifest.json" 2>/dev/null)" ||
+    { err "cannot read runtime kit release manifest from origin/main"; return 1; }
+  ref="$(printf '%s\n' "$manifest" | awk -v channel="$channel" '
+    $0 ~ "\"" channel "\"" { in_channel = 1; next }
+    in_channel && /"ref"[[:space:]]*:/ {
+      gsub(/.*"ref"[[:space:]]*:[[:space:]]*"/, "")
+      gsub(/".*/, "")
+      print
+      exit
+    }
+    in_channel && /^[[:space:]]*}/ { in_channel = 0 }
+  ')"
+  [[ "$ref" =~ ^v[0-9]+[.][0-9]+[.][0-9]+([-+][0-9A-Za-z.-]+)?$ ]] ||
+    { err "invalid runtime kit ref for channel ${channel}: ${ref:-empty}"; return 1; }
+  printf '%s\n' "$ref"
+}
+
+load_runtime_kit() {
+  [[ "${ASTERISK_RUNTIME_KIT_LOADED:-0}" == "1" ]] && return 0
+  command -v git >/dev/null 2>&1 || run "apt-get update -y && apt-get install -y --no-install-recommends ca-certificates git"
+  if [[ -d "${ASTERISK_RUNTIME_KIT_DIR}/.git" ]]; then
+    run "git -C '${ASTERISK_RUNTIME_KIT_DIR}' fetch --all --tags --prune"
+  else
+    run "install -d -m 0755 '$(dirname "$ASTERISK_RUNTIME_KIT_DIR")'"
+    run "git clone '${ASTERISK_RUNTIME_KIT_REPO_URL}' '${ASTERISK_RUNTIME_KIT_DIR}'"
+  fi
+  if [[ -z "$ASTERISK_RUNTIME_KIT_REF" ]]; then
+    ASTERISK_RUNTIME_KIT_REF="$(resolve_runtime_kit_ref "$ASTERISK_RUNTIME_KIT_DIR" "$ASTERISK_RUNTIME_KIT_CHANNEL")"
+    info "Resolved runtime kit ${ASTERISK_RUNTIME_KIT_CHANNEL} channel to ${ASTERISK_RUNTIME_KIT_REF}"
+  fi
+  run "git -C '${ASTERISK_RUNTIME_KIT_DIR}' -c advice.detachedHead=false checkout '${ASTERISK_RUNTIME_KIT_REF}'"
+  git -C "$ASTERISK_RUNTIME_KIT_DIR" pull --ff-only origin "$ASTERISK_RUNTIME_KIT_REF" 2>/dev/null || true
+  [[ -r "${ASTERISK_RUNTIME_KIT_DIR}/lib/packages.sh" ]] || { err "runtime kit packages library not found"; return 1; }
+  export MNSCLOUD_RUNTIME_KIT_LOG_PREFIX="mnscloud-asterisk/runtime-kit"
+  # shellcheck disable=SC1091
+  source "${ASTERISK_RUNTIME_KIT_DIR}/lib/packages.sh"
+  ASTERISK_RUNTIME_KIT_LOADED=1
 }
 
 generate_uuid() {
@@ -385,15 +430,12 @@ ensure_node_uuid_file() {
 }
 
 install_packages_debian() {
-  run "apt-get update -y"
-  run "apt-get install -y --no-install-recommends build-essential git curl wget ca-certificates gnupg pkg-config autoconf automake libtool bison flex make patch libedit-dev libjansson-dev libxml2-dev libsqlite3-dev uuid-dev libssl-dev libcurl4-openssl-dev libnewt-dev libncurses5-dev libncurses-dev unixodbc unixodbc-dev odbc-mariadb default-mysql-client libbcg729-0 libbcg729-dev sngrep tcpdump ngrep dnsutils iputils-ping traceroute mtr-tiny netcat-openbsd jq"
-  if apt-cache show asterisk-codec-bcg729 >/dev/null 2>&1; then
-    if ! run "apt-get install -y --no-install-recommends asterisk-codec-bcg729"; then
-      warn "Optional package asterisk-codec-bcg729 could not be installed. The installer will try to build codec_g729.so via asterisk-g72x + libbcg729."
-    fi
-  else
-    warn "Package asterisk-codec-bcg729 was not found in the configured repositories. The installer will try to build codec_g729.so via asterisk-g72x + libbcg729."
+  if $DRY_RUN; then
+    log DRY "load mnscloud-runtime-kit and run mrtk_ensure_asterisk_build_deps"
+    return 0
   fi
+  load_runtime_kit
+  mrtk_ensure_asterisk_build_deps
 }
 
 enable_menuselect_module() {
