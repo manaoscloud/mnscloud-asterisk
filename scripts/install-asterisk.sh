@@ -787,7 +787,7 @@ registration=realtime,ps_registrations"
   write_file "/etc/asterisk/pjsip.conf" "[global]
 type=global
 endpoint_identifier_order=ip,username,anonymous
-user_agent=MNSCloud Asterisk"
+user_agent=MNSCloud Asterisk PABX"
 
   write_file "/etc/asterisk/extensions.conf" "[general]
 static=yes
@@ -797,7 +797,7 @@ autofallthrough=yes
 [globals]
 
 [default]
-exten => _X.,1,NoOp(MNSCloud Asterisk default context)
+exten => _X.,1,NoOp(MNSCloud Asterisk PABX default context)
  same => n,Hangup(404)
 
 [authenticated]
