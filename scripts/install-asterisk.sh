@@ -44,6 +44,17 @@ ASTERISK_RUNTIME_KIT_DIR="${ASTERISK_RUNTIME_KIT_DIR:-/opt/mnscloud/runtime-kit}
 ASTERISK_RUNTIME_KIT_REPO_URL="${ASTERISK_RUNTIME_KIT_REPO_URL:-https://github.com/manaoscloud/mnscloud-runtime-kit.git}"
 ASTERISK_RUNTIME_KIT_CHANNEL="${ASTERISK_RUNTIME_KIT_CHANNEL:-stable}"
 ASTERISK_RUNTIME_KIT_REF="${ASTERISK_RUNTIME_KIT_REF:-}"
+AGENT_VALIDATOR="/opt/mnscloud/mnscloud-agent/scripts/validate-agent.sh"
+
+validate_mnscloud_agent() {
+  if [[ "$DRY_RUN" == true ]]; then
+    log DRY "bash '${AGENT_VALIDATOR}' --require-active --require-enrolled"
+    return 0
+  fi
+  [[ -x "${AGENT_VALIDATOR}" ]] ||
+    { err "mnscloud-agent validator not found at ${AGENT_VALIDATOR}. Update/reinstall the Agent before installing Asterisk PABX."; return 1; }
+  bash "${AGENT_VALIDATOR}" --require-active --require-enrolled
+}
 
 parse_cli_args() {
   while [[ $# -gt 0 ]]; do
@@ -1273,6 +1284,7 @@ validate_and_start() {
 main() {
   require_root
   parse_cli_args "$@"
+  validate_mnscloud_agent
   echo "asterisk        PABX - Asterisk 22.9.x LTS Multi-Tenant (official repository)"
   echo "Mode: $([[ "$DRY_RUN" == true ]] && echo DRY-RUN || echo APPLY)"
   echo "Log:  ${LOG_FILE}"

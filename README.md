@@ -69,4 +69,9 @@ Asterisk realtime database credentials remain local server configuration. Provid
 interactively, through `/etc/mnscloud/pabx/db.conf`, or through the optional `--db-host`, `--db-port`,
 `--db-name`, `--db-user`, and `--db-pass` installer flags.
 
+Before installing Asterisk PABX, enroll `mnscloud-agent` on the host. The installer validates the
+shared Agent prerequisite contract with
+`/opt/mnscloud/mnscloud-agent/scripts/validate-agent.sh --require-active --require-enrolled`.
+After Asterisk is installed, the Agent derives and reports `voip.asterisk.manage`.
+
 See `asterisk.md` and `SECURITY.md` for details.
