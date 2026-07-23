@@ -33,6 +33,12 @@ contract. It can run on MNSCloud, customer, or partner infrastructure.
 - Asterisk log directory: `/var/log/asterisk`
 - Recording spool: `/var/spool/asterisk/monitor/mnscloud`
 
+### Ordered dial plan fallbacks
+
+PABX dial plan rules store their primary trunk and ordered fallback trunks in the MNSCloud control
+plane. During an outbound attempt, Asterisk dials each resolved trunk in that order and stops on
+the first answered call. No trunk routing or fallback list is configured locally on the server.
+
 ## Install
 
 Install GitHub CLI if needed:

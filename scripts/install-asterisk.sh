@@ -736,7 +736,7 @@ readsql=SELECT CASE n.VbnAction WHEN 'busy' THEN '17' ELSE '21' END FROM Asteris
 
 [AST_RESOLVE_OUTBOUND]
 dsn=mnscloud
-readsql=SELECT CONCAT('PJSIP/', dp.NormalizedNumber, '@', trunk_endpoint.id) FROM (SELECT caller_ext.VoipPabxAccountVpaUUID AS PabxUUID, caller_ext.UserUsrUUID AS UserUUID, rule.VoipPabxTrunkVptUUID AS TrunkUUID, IF(rule.VdrResultType = 'blocked', NULL, IF(rule.VdrReplacement IS NOT NULL AND TRIM(rule.VdrReplacement) <> '', IF(rule.VdrOperator = 'regex', REGEXP_REPLACE('\${SQL_ESC(\${ARG2})}', rule.VdrPattern, rule.VdrReplacement), rule.VdrReplacement), CONCAT(COALESCE(rule.VdrPrepend, ''), SUBSTRING('\${SQL_ESC(\${ARG2})}', IFNULL(rule.VdrStripDigits, 0) + 1)))) AS NormalizedNumber FROM AsteriskEndpoint caller JOIN VoipPabxExtension caller_ext ON caller_ext.VpeUUID = caller.VoipPabxExtensionVpeUUID JOIN VoipPabxAccount account ON account.VpaUUID = caller_ext.VoipPabxAccountVpaUUID JOIN VoipPabxDialPlan plan ON plan.VdpUUID = COALESCE(caller_ext.VoipPabxDialPlanVdpUUID, account.VoipPabxDialPlanVdpUUID) JOIN VoipPabxDialPlanRule rule ON rule.VoipPabxDialPlanVdpUUID = plan.VdpUUID AND rule.UserUsrUUID <=> caller_ext.UserUsrUUID WHERE '\${SQL_ESC(\${ARG1})}' LIKE CONCAT('PJSIP/', caller.id, '-%') AND caller_ext.VpeEnabled = 1 AND caller_ext.VpeDateDeleted IS NULL AND account.VpaIsActive = 1 AND account.VpaDateDeleted IS NULL AND plan.VdpEnabled = 1 AND plan.VdpDateDeleted IS NULL AND rule.VdrEnabled = 1 AND rule.VdrDateDeleted IS NULL AND rule.VdrDirection = 'outbound' AND rule.VdrResultType IN ('outbound', 'blocked') AND ((rule.VdrOperator = 'regex' AND '\${SQL_ESC(\${ARG2})}' REGEXP rule.VdrPattern) OR (rule.VdrOperator = 'exact' AND IF(rule.VdrCaseSensitive <> 0, '\${SQL_ESC(\${ARG2})}' = rule.VdrPattern, LOWER('\${SQL_ESC(\${ARG2})}') = LOWER(rule.VdrPattern))) OR (rule.VdrOperator = 'prefix' AND IF(rule.VdrCaseSensitive <> 0, '\${SQL_ESC(\${ARG2})}' LIKE CONCAT(rule.VdrPattern, '%'), LOWER('\${SQL_ESC(\${ARG2})}') LIKE CONCAT(LOWER(rule.VdrPattern), '%')))) ORDER BY rule.VdrPriority ASC, rule.VdrDateCreated ASC LIMIT 1) dp JOIN VoipPabxTrunk trunk ON trunk.VptUUID = dp.TrunkUUID AND trunk.UserUsrUUID <=> dp.UserUUID AND trunk.VoipPabxAccountVpaUUID = dp.PabxUUID JOIN AsteriskEndpoint trunk_endpoint ON trunk_endpoint.VoipPabxTrunkVptUUID = trunk.VptUUID WHERE dp.NormalizedNumber IS NOT NULL AND trunk.VptEnabled = 1 AND trunk.VptDateDeleted IS NULL AND trunk.VptDirection IN ('outbound', 'both') LIMIT 1
+readsql=WITH matched_rule AS (SELECT caller_ext.VoipPabxAccountVpaUUID AS PabxUUID, caller_ext.UserUsrUUID AS UserUUID, rule.VdrUUID AS RuleUUID, rule.VoipPabxTrunkVptUUID AS PrimaryTrunkUUID, IF(rule.VdrResultType = 'blocked', NULL, IF(rule.VdrReplacement IS NOT NULL AND TRIM(rule.VdrReplacement) <> '', IF(rule.VdrOperator = 'regex', REGEXP_REPLACE('\${SQL_ESC(\${ARG2})}', rule.VdrPattern, rule.VdrReplacement), rule.VdrReplacement), CONCAT(COALESCE(rule.VdrPrepend, ''), SUBSTRING('\${SQL_ESC(\${ARG2})}', IFNULL(rule.VdrStripDigits, 0) + 1)))) AS NormalizedNumber FROM AsteriskEndpoint caller JOIN VoipPabxExtension caller_ext ON caller_ext.VpeUUID = caller.VoipPabxExtensionVpeUUID JOIN VoipPabxAccount account ON account.VpaUUID = caller_ext.VoipPabxAccountVpaUUID JOIN VoipPabxDialPlan plan ON plan.VdpUUID = COALESCE(caller_ext.VoipPabxDialPlanVdpUUID, account.VoipPabxDialPlanVdpUUID) JOIN VoipPabxDialPlanRule rule ON rule.VoipPabxDialPlanVdpUUID = plan.VdpUUID AND rule.UserUsrUUID <=> caller_ext.UserUsrUUID WHERE '\${SQL_ESC(\${ARG1})}' LIKE CONCAT('PJSIP/', caller.id, '-%') AND caller_ext.VpeEnabled = 1 AND caller_ext.VpeDateDeleted IS NULL AND account.VpaIsActive = 1 AND account.VpaDateDeleted IS NULL AND plan.VdpEnabled = 1 AND plan.VdpDateDeleted IS NULL AND rule.VdrEnabled = 1 AND rule.VdrDateDeleted IS NULL AND rule.VdrDirection = 'outbound' AND rule.VdrResultType IN ('outbound', 'blocked') AND ((rule.VdrOperator = 'regex' AND '\${SQL_ESC(\${ARG2})}' REGEXP rule.VdrPattern) OR (rule.VdrOperator = 'exact' AND IF(rule.VdrCaseSensitive <> 0, '\${SQL_ESC(\${ARG2})}' = rule.VdrPattern, LOWER('\${SQL_ESC(\${ARG2})}') = LOWER(rule.VdrPattern))) OR (rule.VdrOperator = 'prefix' AND IF(rule.VdrCaseSensitive <> 0, '\${SQL_ESC(\${ARG2})}' LIKE CONCAT(rule.VdrPattern, '%'), LOWER('\${SQL_ESC(\${ARG2})}') LIKE CONCAT(LOWER(rule.VdrPattern), '%')))) ORDER BY rule.VdrPriority ASC, rule.VdrDateCreated ASC LIMIT 1), candidates AS (SELECT m.NormalizedNumber, endpoint.id AS EndpointID, 0 AS CandidatePriority FROM matched_rule m JOIN VoipPabxTrunk trunk ON trunk.VptUUID=m.PrimaryTrunkUUID AND trunk.UserUsrUUID <=> m.UserUUID AND trunk.VoipPabxAccountVpaUUID=m.PabxUUID JOIN AsteriskEndpoint endpoint ON endpoint.VoipPabxTrunkVptUUID=trunk.VptUUID WHERE trunk.VptEnabled=1 AND trunk.VptDateDeleted IS NULL AND trunk.VptDirection IN ('outbound','both') UNION ALL SELECT m.NormalizedNumber, endpoint.id AS EndpointID, fallback.VdfPriority AS CandidatePriority FROM matched_rule m JOIN VoipPabxDialPlanRuleFallbackTrunk fallback ON fallback.VoipPabxDialPlanRuleVdrUUID=m.RuleUUID AND fallback.UserUsrUUID <=> m.UserUUID AND fallback.VdfDateDeleted IS NULL JOIN VoipPabxTrunk trunk ON trunk.VptUUID=fallback.VoipPabxTrunkVptUUID AND trunk.UserUsrUUID <=> m.UserUUID AND trunk.VoipPabxAccountVpaUUID=m.PabxUUID JOIN AsteriskEndpoint endpoint ON endpoint.VoipPabxTrunkVptUUID=trunk.VptUUID WHERE trunk.VptEnabled=1 AND trunk.VptDateDeleted IS NULL AND trunk.VptDirection IN ('outbound','both')) SELECT GROUP_CONCAT(CONCAT('PJSIP/', NormalizedNumber, '@', EndpointID) ORDER BY CandidatePriority SEPARATOR '|') FROM candidates WHERE NormalizedNumber IS NOT NULL
 
 [AST_GROUP_DIAL]
 dsn=mnscloud
@@ -816,15 +816,22 @@ switch => Realtime/authenticated@extensions
 exten => _X.,1,NoOp(mnscloud authenticated call from \${CHANNEL(name)} to \${EXTEN})
  same => n,Set(CALLER_CHANNEL=\${CHANNEL(name)})
  same => n,Set(TARGET_ENDPOINT=\${ODBC_AST_RESOLVE_INTERNAL(\${CALLER_CHANNEL},\${EXTEN})})
- same => n,ExecIf(\$[\"\${TARGET_ENDPOINT}\" != \"\"]?Set(TARGET_DIAL=PJSIP/\${TARGET_ENDPOINT}))
- same => n,GotoIf(\$[\"\${TARGET_DIAL}\" != \"\"]?record)
- same => n,Set(TARGET_DIAL=\${ODBC_AST_RESOLVE_OUTBOUND(\${CALLER_CHANNEL},\${EXTEN})})
- same => n,GotoIf(\$[\"\${TARGET_DIAL}\" = \"\"]?notfound)
+ same => n,ExecIf(\$[\"\${TARGET_ENDPOINT}\" != \"\"]?Set(TARGET_DIALS=PJSIP/\${TARGET_ENDPOINT}))
+ same => n,GotoIf(\$[\"\${TARGET_DIALS}\" != \"\"]?record)
+ same => n,Set(TARGET_DIALS=\${ODBC_AST_RESOLVE_OUTBOUND(\${CALLER_CHANNEL},\${EXTEN})})
+ same => n,GotoIf(\$[\"\${TARGET_DIALS}\" = \"\"]?notfound)
  same => n(record),Set(MNSCLOUD_RECORDING_PATH=/var/spool/asterisk/monitor/mnscloud/\${STRFTIME(\${EPOCH},,%Y%m%d)}-\${UNIQUEID}.wav)
  same => n,Set(CDR(userfield)=\${MNSCLOUD_RECORDING_PATH})
  same => n,MixMonitor(\${MNSCLOUD_RECORDING_PATH},b)
- same => n(dial),Dial(\${TARGET_DIAL},30)
- same => n,Gosub(mnscloud-dial-result,s,1(\${DIALSTATUS}))
+ same => n,Set(TARGET_DIAL_INDEX=1)
+ same => n(dial),Set(TARGET_DIAL=\${CUT(\${TARGET_DIALS},|,\${TARGET_DIAL_INDEX})})
+ same => n,GotoIf(\$[\"\${TARGET_DIAL}\" = \"\"]?dial-failed)
+ same => n,Dial(\${TARGET_DIAL},30)
+ same => n,GotoIf(\$[\"\${DIALSTATUS}\" = \"ANSWER\"]?dial-finished)
+ same => n,Set(TARGET_DIAL_INDEX=\$[\${TARGET_DIAL_INDEX} + 1])
+ same => n,Goto(dial)
+ same => n(dial-failed),NoOp(MNSCloud outbound trunks exhausted)
+ same => n(dial-finished),Gosub(mnscloud-dial-result,s,1(\${DIALSTATUS}))
  same => n,Hangup()
  same => n(notfound),Hangup(404)
 

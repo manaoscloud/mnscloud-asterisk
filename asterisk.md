@@ -161,6 +161,9 @@ Regras obrigatórias:
   `CHANUNAVAIL` vira `Hangup(20)`, `NOANSWER` vira `Hangup(19)`, `BUSY` vira `Hangup(17)` e
   `CONGESTION` vira `Hangup(34)`. Assim, um ramal sem contato PJSIP registrado não fica em ringback
   vazio quando não há voicemail, encaminhamento ou outro fallback configurado.
+- Para chamadas de saída, a API resolve o tronco principal e os troncos de fallback ordenados da
+  regra de plano de discagem. O Asterisk tenta cada tronco sequencialmente e não mantém listas de
+  roteamento locais.
 - Hints/BLF devem ser tenant-aware. Quando forem provisionados no realtime, devem usar o endpoint
   técnico completo como extensão (`1100@pabx-dev1.publichost.cloud`) apontando para
   `PJSIP/1100@pabx-dev1.publichost.cloud`, nunca apenas o ramal curto (`1100`) em contexto comum.
