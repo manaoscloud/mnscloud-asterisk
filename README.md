@@ -80,4 +80,11 @@ shared Agent prerequisite contract with
 `/opt/mnscloud/mnscloud-agent/scripts/validate-agent.sh --require-active --require-enrolled`.
 After Asterisk is installed, the Agent derives and reports `voip.asterisk.manage`.
 
+For a PABX trunk removed by the control plane, the assigned Agent sends
+`pjsip send unregister <registration>` before `pjsip reload` removes the realtime
+registration object. This prevents a provider from retaining an outbound SIP
+registration until its normal expiry interval. The Agent reports teardown failure
+when the local registration is already missing, rather than falsely confirming
+carrier-side removal.
+
 See `asterisk.md` and `SECURITY.md` for details.
