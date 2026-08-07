@@ -19,6 +19,10 @@ contract. It can run on MNSCloud, customer, or partner infrastructure.
 - Product/runtime: `mnscloud-asterisk`
 - Project directory: `/opt/mnscloud/mnscloud-asterisk`
 - Installer: `scripts/install-asterisk.sh`
+- Update latest: `scripts/update-latest-asterisk.sh`
+- Explicit update: `scripts/update-asterisk.sh --ref <release-tag>`
+- Validate: `scripts/validate-asterisk.sh`
+- Rollback: `scripts/rollback-asterisk.sh --ref <known-good-release-tag>`
 - Shared package installer: `mnscloud-runtime-kit`
 - Service: `asterisk.service`
 - Runtime user: `asterisk`
@@ -79,6 +83,9 @@ Before installing Asterisk PABX, enroll `mnscloud-agent` on the host. The instal
 shared Agent prerequisite contract with
 `/opt/mnscloud/mnscloud-agent/scripts/validate-agent.sh --require-active --require-enrolled`.
 After Asterisk is installed, the Agent derives and reports `voip.asterisk.manage`.
+When `scripts/update-asterisk.sh` is present, the Agent also reports
+`mnscloud.asterisk.update`, includes this runtime in heartbeat inventory, and can execute approved
+`mnscloud-asterisk` release rollouts from the MNSCloud control plane.
 
 For a PABX trunk removed by the control plane, the assigned Agent sends
 `pjsip send unregister <registration>` before `pjsip reload` removes the realtime

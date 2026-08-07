@@ -27,6 +27,10 @@ monorepo at runtime.
 
 - Product repository: `manaoscloud/mnscloud-asterisk`
 - Local installer: `scripts/install-asterisk.sh`
+- Update latest: `scripts/update-latest-asterisk.sh`
+- Explicit update: `scripts/update-asterisk.sh --ref <release-tag>`
+- Validator: `scripts/validate-asterisk.sh`
+- Rollback: `scripts/rollback-asterisk.sh --ref <known-good-release-tag>`
 - Runtime API consumer: MNSCloud PABX Asterisk endpoints under `/api/v1/pabx/asterisk/*`
 - Local state prefix: `/etc/mnscloud/pabx`
 - Install flags: `--api-base`, `--node-uuid`, `--runtime-token`/`--install-token`, and optional
@@ -34,7 +38,7 @@ monorepo at runtime.
 
 ## Checklist
 
-- Validate `scripts/install-asterisk.sh` with `bash -n`.
+- Validate `scripts/*.sh` with `bash -n`.
 - Search the module for sensitive values before publishing.
 - Keep all required installer helpers inside this repository.
 - Keep the module consuming API contracts only.
