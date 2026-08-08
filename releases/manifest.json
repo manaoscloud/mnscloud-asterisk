@@ -3,9 +3,9 @@
   "repository": "manaoscloud/mnscloud-asterisk",
   "channels": {
     "stable": {
-      "version": "0.1.6",
-      "ref": "v0.1.6",
-      "releasedAt": "2026-08-07T11:48:20Z",
+      "version": "0.1.7",
+      "ref": "v0.1.7",
+      "releasedAt": "2026-08-08T18:24:18Z",
       "minimumVersion": "0.1.0"
     }
   }
