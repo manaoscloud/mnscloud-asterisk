@@ -45,6 +45,7 @@ ASTERISK_RUNTIME_KIT_REPO_URL="${ASTERISK_RUNTIME_KIT_REPO_URL:-https://github.c
 ASTERISK_RUNTIME_KIT_CHANNEL="${ASTERISK_RUNTIME_KIT_CHANNEL:-stable}"
 ASTERISK_RUNTIME_KIT_REF="${ASTERISK_RUNTIME_KIT_REF:-}"
 AGENT_VALIDATOR="/opt/mnscloud/mnscloud-agent/scripts/validate-agent.sh"
+AGENT_REPO_INSTALLER="/opt/mnscloud/mnscloud-agent/scripts/install-agent.sh"
 
 validate_mnscloud_agent() {
   if [[ "$DRY_RUN" == true ]]; then
@@ -54,6 +55,25 @@ validate_mnscloud_agent() {
   [[ -x "${AGENT_VALIDATOR}" ]] ||
     { err "mnscloud-agent validator not found at ${AGENT_VALIDATOR}. Update/reinstall the Agent before installing Asterisk PABX."; return 1; }
   bash "${AGENT_VALIDATOR}" --require-active --require-enrolled
+}
+
+refresh_agent_capabilities() {
+  local install_label
+  install_label="$(hostname -f 2>/dev/null || hostname 2>/dev/null || printf 'mnscloud-agent')"
+
+  if [[ "$DRY_RUN" == true ]]; then
+    log DRY "refresh mnscloud-agent capabilities so it publishes mnscloud.asterisk.update"
+    return 0
+  fi
+
+  if [[ -x "${AGENT_REPO_INSTALLER}" ]]; then
+    info "Refreshing mnscloud-agent capabilities after Asterisk PABX runtime install."
+    bash "${AGENT_REPO_INSTALLER}" --api-base "${API_BASE}" --install-label "${install_label}"
+    return 0
+  fi
+
+  warn "mnscloud-agent source repo not found at ${AGENT_REPO_INSTALLER}; restarting service so runtime capability detection can refresh."
+  run "systemctl restart mnscloud-agent"
 }
 
 parse_cli_args() {
@@ -1320,6 +1340,7 @@ main() {
   write_systemd_service
   validate_and_start
   heartbeat || true
+  refresh_agent_capabilities
   ok "Asterisk installed and configured with MariaDB Realtime. Node UUID: ${NODE_UUID}"
 }
 
