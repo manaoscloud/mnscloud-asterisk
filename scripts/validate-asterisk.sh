@@ -12,6 +12,21 @@ fail() {
   exit 1
 }
 
+wait_for() {
+  local description="$1"
+  local attempts="${2:-12}"
+  local delay="${3:-2}"
+  shift 3
+  local i
+  for i in $(seq 1 "$attempts"); do
+    if "$@" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep "$delay"
+  done
+  fail "$description"
+}
+
 require_file() {
   local path="$1"
   [[ -s "$path" ]] || fail "required runtime state is missing or empty: ${path}"
@@ -40,11 +55,9 @@ grep -Eq '^[[:space:]]*endpoint_identifier_order[[:space:]]*=' "$AST_PJSIP_CONFI
 grep -Eq '^[[:space:]]*switch[[:space:]]*=>[[:space:]]*Realtime' "$AST_EXTENSIONS_CONFIG" ||
   fail "Realtime dialplan switch is missing: ${AST_EXTENSIONS_CONFIG}"
 
-systemctl is-active --quiet asterisk || fail 'asterisk.service is not active.'
-"${ASTERISK_BIN}" -rx 'core show version' >/dev/null || fail 'Asterisk CLI cannot query core version.'
-"${ASTERISK_BIN}" -rx 'module show like res_pjsip.so' | grep -q 'res_pjsip.so' ||
-  fail 'res_pjsip.so is not loaded.'
-"${ASTERISK_BIN}" -rx 'module show like res_config_odbc.so' | grep -q 'res_config_odbc.so' ||
-  fail 'res_config_odbc.so is not loaded.'
+wait_for 'asterisk.service is not active.' 15 2 systemctl is-active --quiet asterisk
+wait_for 'Asterisk CLI cannot query core version.' 15 2 "$ASTERISK_BIN" -rx 'core show version'
+wait_for 'res_pjsip.so is not loaded.' 15 2 bash -c "\"$ASTERISK_BIN\" -rx 'module show like res_pjsip.so' | grep -q 'res_pjsip.so'"
+wait_for 'res_config_odbc.so is not loaded.' 15 2 bash -c "\"$ASTERISK_BIN\" -rx 'module show like res_config_odbc.so' | grep -q 'res_config_odbc.so'"
 
 printf '[validate-asterisk] Asterisk runtime validation OK\n'
