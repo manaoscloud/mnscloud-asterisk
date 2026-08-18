@@ -47,6 +47,10 @@ ASTERISK_RUNTIME_KIT_REF="${ASTERISK_RUNTIME_KIT_REF:-}"
 AGENT_VALIDATOR="/opt/mnscloud/mnscloud-agent/scripts/validate-agent.sh"
 AGENT_REPO_INSTALLER="/opt/mnscloud/mnscloud-agent/scripts/install-agent.sh"
 
+has_interactive_tty() {
+  [[ -t 0 && -r /dev/tty && -w /dev/tty ]]
+}
+
 validate_mnscloud_agent() {
   if [[ "$DRY_RUN" == true ]]; then
     log DRY "bash '${AGENT_VALIDATOR}' --require-active --require-enrolled"
@@ -300,7 +304,7 @@ prompt_asterisk_db_config() {
     return 0
   fi
 
-  [[ -r /dev/tty && -w /dev/tty ]] || {
+  has_interactive_tty || {
     err "Interactive terminal is unavailable and ${AST_DB_CONFIG_FILE} does not contain valid credentials."
     return 1
   }
@@ -387,7 +391,7 @@ ensure_asterisk_db_config() {
   while true; do
     if [[ "${loaded}" == "true" ]]; then
       ok "Asterisk DB credentials loaded from ${AST_DB_CONFIG_FILE}: ${AST_DB_USER}@${AST_DB_HOST}:${AST_DB_PORT}/${AST_DB_NAME}"
-      if [[ -r /dev/tty && -w /dev/tty ]]; then
+      if has_interactive_tty; then
         read -r -p "Use these Asterisk DB credentials? [Y/n]: " answer </dev/tty
         if [[ "${answer,,}" =~ ^n ]]; then
           prompt_asterisk_db_config
@@ -403,7 +407,7 @@ ensure_asterisk_db_config() {
       return 0
     fi
 
-    [[ -r /dev/tty && -w /dev/tty ]] || return 1
+    has_interactive_tty || return 1
     warn "Mandatory MariaDB validation failed. Enter the credentials again."
     loaded=false
   done
@@ -1248,7 +1252,7 @@ wait_for_node_registration() {
     warn "Automatic API validation failed; falling back to interactive validation."
   fi
 
-  if $DRY_RUN || ! [[ -t 0 && -r /dev/tty && -w /dev/tty ]]; then
+  if $DRY_RUN || ! has_interactive_tty; then
     warn "Interactive terminal is unavailable at /dev/tty; skipping Node UUID registration wait."
     return 1
   fi
