@@ -474,6 +474,10 @@ install_packages_debian() {
     log DRY "load mnscloud-runtime-kit and run mrtk_ensure_asterisk_build_deps"
     return 0
   fi
+  if [[ "${MNSCLOUD_RUNTIME_UPDATE_IN_PROGRESS:-}" == "1" ]] && command -v asterisk >/dev/null 2>&1; then
+    info "Skipping Asterisk build dependency refresh during Agent-managed runtime update; Asterisk is already installed."
+    return 0
+  fi
   load_runtime_kit
   mrtk_ensure_asterisk_build_deps
 }
