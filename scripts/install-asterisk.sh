@@ -771,6 +771,10 @@ readsql=SELECT CASE n.VbnAction WHEN 'busy' THEN '17' ELSE '21' END FROM Asteris
 dsn=mnscloud
 readsql=WITH matched_rule AS (SELECT caller_ext.VoipPabxAccountVpaUUID AS PabxUUID, caller_ext.UserUsrUUID AS UserUUID, rule.VdrUUID AS RuleUUID, rule.VoipPabxTrunkVptUUID AS PrimaryTrunkUUID, IF(rule.VdrResultType = 'blocked', NULL, IF(rule.VdrReplacement IS NOT NULL AND TRIM(rule.VdrReplacement) <> '', IF(rule.VdrOperator = 'regex', REGEXP_REPLACE('\${SQL_ESC(\${ARG2})}', rule.VdrPattern, rule.VdrReplacement), rule.VdrReplacement), CONCAT(COALESCE(rule.VdrPrepend, ''), SUBSTRING('\${SQL_ESC(\${ARG2})}', IFNULL(rule.VdrStripDigits, 0) + 1)))) AS NormalizedNumber FROM AsteriskEndpoint caller JOIN VoipPabxExtension caller_ext ON caller_ext.VpeUUID = caller.VoipPabxExtensionVpeUUID JOIN VoipPabxAccount account ON account.VpaUUID = caller_ext.VoipPabxAccountVpaUUID JOIN VoipPabxDialPlan plan ON plan.VdpUUID = COALESCE(caller_ext.VoipPabxDialPlanVdpUUID, account.VoipPabxDialPlanVdpUUID) JOIN VoipPabxDialPlanRule rule ON rule.VoipPabxDialPlanVdpUUID = plan.VdpUUID AND rule.UserUsrUUID <=> caller_ext.UserUsrUUID WHERE '\${SQL_ESC(\${ARG1})}' LIKE CONCAT('PJSIP/', caller.id, '-%') AND caller_ext.VpeEnabled = 1 AND caller_ext.VpeDateDeleted IS NULL AND account.VpaIsActive = 1 AND account.VpaDateDeleted IS NULL AND plan.VdpEnabled = 1 AND plan.VdpDateDeleted IS NULL AND rule.VdrEnabled = 1 AND rule.VdrDateDeleted IS NULL AND rule.VdrDirection = 'outbound' AND rule.VdrResultType IN ('outbound', 'blocked') AND ((rule.VdrOperator = 'regex' AND '\${SQL_ESC(\${ARG2})}' REGEXP rule.VdrPattern) OR (rule.VdrOperator = 'exact' AND IF(rule.VdrCaseSensitive <> 0, '\${SQL_ESC(\${ARG2})}' = rule.VdrPattern, LOWER('\${SQL_ESC(\${ARG2})}') = LOWER(rule.VdrPattern))) OR (rule.VdrOperator = 'prefix' AND IF(rule.VdrCaseSensitive <> 0, '\${SQL_ESC(\${ARG2})}' LIKE CONCAT(rule.VdrPattern, '%'), LOWER('\${SQL_ESC(\${ARG2})}') LIKE CONCAT(LOWER(rule.VdrPattern), '%')))) ORDER BY rule.VdrPriority ASC, rule.VdrDateCreated ASC LIMIT 1), candidates AS (SELECT m.NormalizedNumber, endpoint.id AS EndpointID, 0 AS CandidatePriority FROM matched_rule m JOIN VoipPabxTrunk trunk ON trunk.VptUUID=m.PrimaryTrunkUUID AND trunk.UserUsrUUID <=> m.UserUUID AND trunk.VoipPabxAccountVpaUUID=m.PabxUUID JOIN AsteriskEndpoint endpoint ON endpoint.VoipPabxTrunkVptUUID=trunk.VptUUID WHERE trunk.VptEnabled=1 AND trunk.VptDateDeleted IS NULL AND trunk.VptDirection IN ('outbound','both') UNION ALL SELECT m.NormalizedNumber, endpoint.id AS EndpointID, fallback.VdfPriority AS CandidatePriority FROM matched_rule m JOIN VoipPabxDialPlanRuleFallbackTrunk fallback ON fallback.VoipPabxDialPlanRuleVdrUUID=m.RuleUUID AND fallback.UserUsrUUID <=> m.UserUUID AND fallback.VdfDateDeleted IS NULL JOIN VoipPabxTrunk trunk ON trunk.VptUUID=fallback.VoipPabxTrunkVptUUID AND trunk.UserUsrUUID <=> m.UserUUID AND trunk.VoipPabxAccountVpaUUID=m.PabxUUID JOIN AsteriskEndpoint endpoint ON endpoint.VoipPabxTrunkVptUUID=trunk.VptUUID WHERE trunk.VptEnabled=1 AND trunk.VptDateDeleted IS NULL AND trunk.VptDirection IN ('outbound','both')) SELECT GROUP_CONCAT(CONCAT('PJSIP/', NormalizedNumber, '@', EndpointID) ORDER BY CandidatePriority SEPARATOR '|') FROM candidates WHERE NormalizedNumber IS NOT NULL
 
+[AST_TRUNK_DIAGNOSTIC]
+dsn=mnscloud
+readsql=SELECT CONCAT(IFNULL(t.VptDiagnosticCaptureEnabled,0),'|',COALESCE(NULLIF(t.VptDiagnosticCaptureMode,''),'sip_capture'),'|',LEAST(GREATEST(IFNULL(t.VptDiagnosticCaptureSeconds,60),10),300)) FROM VoipPabxTrunk t JOIN AsteriskEndpoint endpoint ON endpoint.VoipPabxTrunkVptUUID=t.VptUUID WHERE t.VptEnabled=1 AND t.VptDateDeleted IS NULL AND (('\${SQL_ESC(\${ARG1})}' LIKE CONCAT('PJSIP/', endpoint.id, '-%')) OR ('\${SQL_ESC(\${ARG2})}' LIKE CONCAT('%@', endpoint.id) OR '\${SQL_ESC(\${ARG2})}' LIKE CONCAT('%@', endpoint.id, '&%') OR '\${SQL_ESC(\${ARG2})}' LIKE CONCAT('%@', endpoint.id, '|%'))) ORDER BY t.VptPriority ASC LIMIT 1
+
 [AST_GROUP_DIAL]
 dsn=mnscloud
 readsql=SELECT GROUP_CONCAT(CONCAT('PJSIP/', endpoint.id) ORDER BY member.VgmPriority ASC, member.VgmDateCreated ASC SEPARATOR '&') FROM VoipPabxGroup grp JOIN VoipPabxGroupMember member ON member.VoipPabxGroupVpgUUID = grp.VpgUUID AND member.VgmDateDeleted IS NULL AND member.VgmEnabled = 1 JOIN VoipPabxExtension ext ON ext.VpeUUID = member.VoipPabxExtensionVpeUUID AND ext.VpeDateDeleted IS NULL AND ext.VpeEnabled = 1 JOIN AsteriskEndpoint endpoint ON endpoint.VoipPabxExtensionVpeUUID = ext.VpeUUID WHERE grp.VpgUUID = FuncUUIDToBin('\${SQL_ESC(\${ARG1})}') AND grp.VpgDateDeleted IS NULL AND grp.VpgEnabled = 1
@@ -859,6 +863,11 @@ exten => _X.,1,NoOp(mnscloud authenticated call from \${CHANNEL(name)} to \${EXT
  same => n,Set(TARGET_DIAL_INDEX=1)
  same => n(dial),Set(TARGET_DIAL=\${CUT(\${TARGET_DIALS},|,\${TARGET_DIAL_INDEX})})
  same => n,GotoIf(\$[\"\${TARGET_DIAL}\" = \"\"]?dial-failed)
+ same => n,Set(MNSCLOUD_TRUNK_DIAG=\${ODBC_AST_TRUNK_DIAGNOSTIC(\${CALLER_CHANNEL},\${TARGET_DIAL})})
+ same => n,Set(MNSCLOUD_DIAG_ENABLED=\${CUT(\${MNSCLOUD_TRUNK_DIAG},|,1)})
+ same => n,Set(MNSCLOUD_DIAG_MODE=\${IF(\$[\"\${CUT(\${MNSCLOUD_TRUNK_DIAG},|,2)}\" = \"\"]?sip_capture:\${CUT(\${MNSCLOUD_TRUNK_DIAG},|,2)})})
+ same => n,Set(MNSCLOUD_DIAG_SECONDS=\${IF(\$[\"\${CUT(\${MNSCLOUD_TRUNK_DIAG},|,3)}\" = \"\"]?60:\${CUT(\${MNSCLOUD_TRUNK_DIAG},|,3)})})
+ same => n,ExecIf(\$[\"\${MNSCLOUD_DIAG_ENABLED}\" = \"1\"]?System(/bin/sh -c '/opt/mnscloud/mnscloud-asterisk/scripts/mnscloud-cdr-diagnostic-capture.sh --enabled yes --module pabx --engine asterisk --resource-type pabx_cdr --resource-uuid \"asterisk-uniqueid-\${UNIQUEID}\" --call-id \"\${UNIQUEID}\" --mode \"\${MNSCLOUD_DIAG_MODE}\" --duration \"\${MNSCLOUD_DIAG_SECONDS}\" --filter \"port 5060\" >>/var/log/asterisk/mnscloud-cdr-diagnostic-capture.log 2>&1 &'))
  same => n,Dial(\${TARGET_DIAL},30)
  same => n,GotoIf(\$[\"\${DIALSTATUS}\" = \"ANSWER\"]?dial-finished)
  same => n,Set(TARGET_DIAL_INDEX=\$[\${TARGET_DIAL_INDEX} + 1])
@@ -878,6 +887,11 @@ exten => _X.,1,NoOp(mnscloud inbound trunk call from \${CHANNEL(name)} to \${EXT
  same => n,Set(MNSCLOUD_RECORDING_PATH=/var/spool/asterisk/monitor/mnscloud/\${STRFTIME(\${EPOCH},,%Y%m%d)}-\${UNIQUEID}.wav)
  same => n,Set(CDR(userfield)=\${MNSCLOUD_RECORDING_PATH})
  same => n,MixMonitor(\${MNSCLOUD_RECORDING_PATH},b)
+ same => n,Set(MNSCLOUD_TRUNK_DIAG=\${ODBC_AST_TRUNK_DIAGNOSTIC(\${CHANNEL(name)},\${TARGET_DIAL})})
+ same => n,Set(MNSCLOUD_DIAG_ENABLED=\${CUT(\${MNSCLOUD_TRUNK_DIAG},|,1)})
+ same => n,Set(MNSCLOUD_DIAG_MODE=\${IF(\$[\"\${CUT(\${MNSCLOUD_TRUNK_DIAG},|,2)}\" = \"\"]?sip_capture:\${CUT(\${MNSCLOUD_TRUNK_DIAG},|,2)})})
+ same => n,Set(MNSCLOUD_DIAG_SECONDS=\${IF(\$[\"\${CUT(\${MNSCLOUD_TRUNK_DIAG},|,3)}\" = \"\"]?60:\${CUT(\${MNSCLOUD_TRUNK_DIAG},|,3)})})
+ same => n,ExecIf(\$[\"\${MNSCLOUD_DIAG_ENABLED}\" = \"1\"]?System(/bin/sh -c '/opt/mnscloud/mnscloud-asterisk/scripts/mnscloud-cdr-diagnostic-capture.sh --enabled yes --module pabx --engine asterisk --resource-type pabx_cdr --resource-uuid \"asterisk-uniqueid-\${UNIQUEID}\" --call-id \"\${UNIQUEID}\" --mode \"\${MNSCLOUD_DIAG_MODE}\" --duration \"\${MNSCLOUD_DIAG_SECONDS}\" --filter \"port 5060\" >>/var/log/asterisk/mnscloud-cdr-diagnostic-capture.log 2>&1 &'))
  same => n,Dial(\${TARGET_DIAL},30)
  same => n,Gosub(mnscloud-dial-result,s,1(\${DIALSTATUS}))
  same => n,Hangup()
@@ -961,8 +975,9 @@ full => notice,warning,error,debug,verbose,security
 security => security"
 
   run "touch /var/log/asterisk/full /var/log/asterisk/messages /var/log/asterisk/security"
-  run "chown asterisk:asterisk /var/log/asterisk/full /var/log/asterisk/messages /var/log/asterisk/security"
-  run "chmod 0644 /var/log/asterisk/full /var/log/asterisk/messages /var/log/asterisk/security"
+  run "touch /var/log/asterisk/mnscloud-cdr-diagnostic-capture.log"
+  run "chown asterisk:asterisk /var/log/asterisk/full /var/log/asterisk/messages /var/log/asterisk/security /var/log/asterisk/mnscloud-cdr-diagnostic-capture.log"
+  run "chmod 0644 /var/log/asterisk/full /var/log/asterisk/messages /var/log/asterisk/security /var/log/asterisk/mnscloud-cdr-diagnostic-capture.log"
 
   local local_ip permits permit_line
   local_ip="$(hostname -I 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i !~ /:/) { print $i; exit }}')"
