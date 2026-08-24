@@ -188,10 +188,9 @@ realtime do Asterisk quando o recurso é criado, alterado ou removido:
 
 - `AsteriskEndpoint`: endpoint técnico `trunk-<VptID>`.
 - `AsteriskAor`: contato estático `sip:<host>:<port>`.
-- `AsteriskAuth`: criado quando `authMode` exige digest e há usuário/senha.
+- `AsteriskAuth`: criado quando `authMode = register` e há usuário/senha.
 - `AsteriskEndpointIdentify`: criado para trunks inbound/both usando `allowedCidrs` ou `host`.
-- `AsteriskRegistration`: criado quando `authMode = register`, `registerEnabled = true` e há
-  usuário/senha.
+- `AsteriskRegistration`: criado quando `authMode = register` e há usuário/senha.
 
 O Asterisk consulta esses objetos por views `AsteriskRealtime*` mapeadas em
 `/etc/asterisk/extconfig.conf`. As views expõem apenas colunas PJSIP e ocultam metadados internos
@@ -205,8 +204,8 @@ FreeSWITCH, os mesmos campos canônicos são renderizados como gateways no `sofi
 O Asterisk suporta três formas principais nesta modelagem:
 
 - `ip_acl`: identifica chamadas recebidas por IP/CIDR em `AsteriskEndpointIdentify`.
-- `digest`: cria auth no endpoint para autenticação SIP digest.
 - `register`: cria auth e registro outbound periódico em `AsteriskRegistration`.
+- `none`: mantém o tronco sem autenticação gerenciada pelo MNSCloud.
 
 O contexto de entrada dos trunks Asterisk é `trunk-inbound`. Esse contexto deve resolver rotas de
 entrada por trunk/DID para ramal, fila, grupo, URA ou destino externo sem depender de contexto por
