@@ -205,7 +205,14 @@ O Asterisk suporta três formas principais nesta modelagem:
 
 - `ip_acl`: identifica chamadas recebidas por IP/CIDR em `AsteriskEndpointIdentify`.
 - `register`: cria auth e registro outbound periódico em `AsteriskRegistration`.
-- `none`: mantém o tronco sem autenticação gerenciada pelo MNSCloud.
+- `none`: mantém o tronco sem autenticação gerenciada pelo MNSCloud. Esse modo não exige `host` e
+  não deve materializar `AsteriskAor`, `AsteriskEndpointIdentify` ou `AsteriskRegistration` até que
+  o trunk seja configurado como `ip_acl` ou `register`.
+
+O campo `host` é obrigatório apenas para `ip_acl` e `register`, porque nesses modos ele é usado para
+contato estático, identificação por origem e/ou registro outbound. Para `none`, o banco aceita
+`NULL`, a API limpa valores residuais de autenticação e o runtime fail-closed ignora trunks sem host
+para evitar artefatos PJSIP inválidos.
 
 O contexto de entrada dos trunks Asterisk é `trunk-inbound`. Esse contexto deve resolver rotas de
 entrada por trunk/DID para ramal, fila, grupo, URA ou destino externo sem depender de contexto por
