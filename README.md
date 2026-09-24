@@ -109,6 +109,16 @@ CPUs, RAM, swap, disk), every command with its complete stdout/stderr, and an `E
 
 To review a failed install: `grep -nE 'ERROR|END ' /var/log/mnscloud-install.log | tail`.
 
+Runtime secrets (API token, AMI secret, database password) are registered with the installer log
+and masked as `***` in every `RUN:`/failure line.
+
+The generated ODBC DSN pins `CHARSET=utf8mb4` and
+`INITSTMT=SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci`: MariaDB 11.2+ otherwise gives utf8mb4
+clients `utf8mb4_uca1400_ai_ci`, and realtime `LIKE` lookups against the `utf8mb4_unicode_ci`
+views fail with "Illegal mix of collations". The installer fails if the DSN collation differs.
+ARI is explicitly disabled (`ari.conf`) and the unused `res_pjsip_config_wizard` and
+`res_stun_monitor` modules are not loaded.
+
 For a PABX trunk removed by the control plane, the assigned Agent sends
 `pjsip send unregister <registration>` before `pjsip reload` removes the realtime
 registration object. This prevents a provider from retaining an outbound SIP
