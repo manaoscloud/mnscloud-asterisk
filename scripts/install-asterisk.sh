@@ -44,6 +44,9 @@ ASTERISK_RUNTIME_KIT_DIR="${ASTERISK_RUNTIME_KIT_DIR:-/opt/mnscloud/runtime-kit}
 ASTERISK_RUNTIME_KIT_REPO_URL="${ASTERISK_RUNTIME_KIT_REPO_URL:-https://github.com/manaoscloud/mnscloud-runtime-kit.git}"
 ASTERISK_RUNTIME_KIT_CHANNEL="${ASTERISK_RUNTIME_KIT_CHANNEL:-stable}"
 ASTERISK_RUNTIME_KIT_REF="${ASTERISK_RUNTIME_KIT_REF:-}"
+ASTERISK_BUILD_JOBS="${ASTERISK_BUILD_JOBS:-}"
+ASTERISK_BUILD_MIN_DISK_MB="${ASTERISK_BUILD_MIN_DISK_MB:-3072}"
+ASTERISK_BUILD_MB_PER_JOB="${ASTERISK_BUILD_MB_PER_JOB:-1024}"
 AGENT_VALIDATOR="/opt/mnscloud/mnscloud-agent/scripts/validate-agent.sh"
 AGENT_REPO_INSTALLER="/opt/mnscloud/mnscloud-agent/scripts/install-agent.sh"
 
@@ -321,7 +324,8 @@ prompt_asterisk_db_config() {
     AST_DB_PORT="${value:-3306}"
     read -r -p "Enter the Asterisk MariaDB database name: " AST_DB_NAME </dev/tty
     read -r -p "Enter the Asterisk MariaDB user: " AST_DB_USER </dev/tty
-    read -r -p "Enter the Asterisk MariaDB password: " AST_DB_PASS </dev/tty
+    read -r -s -p "Enter the Asterisk MariaDB password: " AST_DB_PASS </dev/tty
+    printf '\n' >/dev/tty
 
     if [[ -n "${AST_DB_HOST}" && "${AST_DB_PORT}" =~ ^[0-9]+$ && -n "${AST_DB_NAME}" && -n "${AST_DB_USER}" && -n "${AST_DB_PASS}" ]]; then
       return 0
@@ -525,20 +529,94 @@ enable_asterisk_modules() {
   done
 }
 
+# Parallel make jobs bounded by memory: each Asterisk/pjproject compiler job
+# can need close to 1 GB, and small PABX VMs frequently run without swap.
+asterisk_build_jobs() {
+  local cpus mem_mb jobs
+  if [[ -n "${ASTERISK_BUILD_JOBS}" ]]; then
+    printf '%s\n' "${ASTERISK_BUILD_JOBS}"
+    return 0
+  fi
+  cpus="$(nproc 2>/dev/null || echo 1)"
+  mem_mb="$(awk '/^(MemTotal|SwapTotal):/ {sum += $2} END {print int(sum/1024)}' /proc/meminfo 2>/dev/null || echo 0)"
+  jobs=$(( mem_mb / ASTERISK_BUILD_MB_PER_JOB ))
+  (( jobs > cpus )) && jobs="${cpus}"
+  (( jobs < 1 )) && jobs=1
+  printf '%s\n' "${jobs}"
+}
+
+asterisk_build_preflight() {
+  local build_parent avail_mb mem_mb swap_mb jobs
+  build_parent="$(dirname "${ASTERISK_SRC_DIR}")"
+  mkdir -p "${build_parent}"
+  avail_mb="$(df -Pm "${build_parent}" | awk 'NR==2 {print $4}')"
+  mem_mb="$(awk '/^MemTotal:/ {print int($2/1024)}' /proc/meminfo)"
+  swap_mb="$(awk '/^SwapTotal:/ {print int($2/1024)}' /proc/meminfo)"
+  jobs="$(asterisk_build_jobs)"
+  [[ "${jobs}" =~ ^[1-9][0-9]*$ ]] || { err "Invalid ASTERISK_BUILD_JOBS: ${jobs}"; return 1; }
+
+  info "Build preflight: source=${ASTERISK_SRC_DIR} disk_free=${avail_mb}MB (min ${ASTERISK_BUILD_MIN_DISK_MB}MB) mem=${mem_mb}MB swap=${swap_mb}MB jobs=${jobs}"
+  if (( avail_mb < ASTERISK_BUILD_MIN_DISK_MB )); then
+    err "Not enough free disk in ${build_parent} for the Asterisk build: ${avail_mb}MB < ${ASTERISK_BUILD_MIN_DISK_MB}MB."
+    return 1
+  fi
+  if (( mem_mb + swap_mb < 1536 )); then
+    warn "Low memory for compiling Asterisk (${mem_mb}MB RAM + ${swap_mb}MB swap). Building with ${jobs} job(s); add RAM or swap if the compiler is killed."
+  fi
+  ok "Build preflight passed."
+}
+
+# Asterisk hides third-party (pjproject/jansson) compiler output unless
+# NOISY_BUILD is set, so every build step runs with it and the full compiler
+# output lands in the install log. A failed parallel build is retried once
+# sequentially so the real error is not interleaved with other jobs.
+build_asterisk_sources() {
+  local jobs
+  jobs="$(asterisk_build_jobs)"
+  if run "cd '${ASTERISK_SRC_DIR}' && make -j${jobs} NOISY_BUILD=yes"; then
+    return 0
+  fi
+  if [[ "${jobs}" == "1" ]]; then
+    return 1
+  fi
+  warn "Parallel Asterisk build failed with -j${jobs}; retrying sequentially (-j1) to isolate the error."
+  run "cd '${ASTERISK_SRC_DIR}' && make -j1 NOISY_BUILD=yes"
+}
+
+install_failure_diagnostics() {
+  local cfg
+  echo "----- diagnostics: Asterisk build tree ${ASTERISK_SRC_DIR} -----"
+  [[ -f "${ASTERISK_SRC_DIR}/.version" ]] && echo "asterisk source version: $(cat "${ASTERISK_SRC_DIR}/.version")"
+  for cfg in "${ASTERISK_SRC_DIR}/config.log" "${ASTERISK_SRC_DIR}/third-party/pjproject/source/config.log"; do
+    if [[ -f "${cfg}" && -n "${MNSCLOUD_INSTALL_STARTED_AT}" && "$(stat -c %Y "${cfg}")" -ge "${MNSCLOUD_INSTALL_STARTED_AT}" ]]; then
+      echo "--- tail ${cfg}"
+      tail -n 40 "${cfg}"
+    fi
+  done
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files asterisk.service >/dev/null 2>&1; then
+    echo "--- asterisk.service"
+    systemctl status asterisk --no-pager -n 30 2>&1 || true
+  fi
+}
+
 install_asterisk_from_source() {
   if command -v asterisk >/dev/null 2>&1 && [[ "${ASTERISK_FORCE_BUILD:-false}" != "true" ]]; then
     ok "Asterisk is already installed: $(asterisk -V 2>/dev/null || true)"
     return 0
   fi
+  if ! $DRY_RUN; then
+    asterisk_build_preflight
+  fi
   run "rm -rf '${ASTERISK_SRC_DIR}'"
   run "mkdir -p '${ASTERISK_SRC_DIR}'"
   run "curl -fsSL '${ASTERISK_SOURCE_URL}' -o '${ASTERISK_SRC_DIR}/asterisk.tar.gz'"
   run "tar -xzf '${ASTERISK_SRC_DIR}/asterisk.tar.gz' -C '${ASTERISK_SRC_DIR}' --strip-components=1"
+  info "Asterisk source version: $(cat "${ASTERISK_SRC_DIR}/.version" 2>/dev/null || echo unknown) (${ASTERISK_SOURCE_URL})"
   run "cd '${ASTERISK_SRC_DIR}' && ./configure --with-jansson-bundled --with-pjproject-bundled"
-  run "cd '${ASTERISK_SRC_DIR}' && make menuselect.makeopts"
+  run "cd '${ASTERISK_SRC_DIR}' && make menuselect.makeopts NOISY_BUILD=yes"
   enable_asterisk_modules
-  run "cd '${ASTERISK_SRC_DIR}' && make -j\$(nproc)"
-  run "cd '${ASTERISK_SRC_DIR}' && make install"
+  build_asterisk_sources
+  run "cd '${ASTERISK_SRC_DIR}' && make install NOISY_BUILD=yes"
   run "cd '${ASTERISK_SRC_DIR}' && make install-headers || true"
   run "cd '${ASTERISK_SRC_DIR}' && make config"
   run "ldconfig"
@@ -633,7 +711,7 @@ build_asterisk_g729_codec() {
   fi
   run "cd '${ASTERISK_G72X_BUILD_DIR}' && bash ./autogen.sh"
   run "cd '${ASTERISK_G72X_BUILD_DIR}' && ./configure --prefix=/usr --libdir=/usr/lib --with-bcg729 --with-asterisk-includes='${include_dir}'"
-  run "cd '${ASTERISK_G72X_BUILD_DIR}' && make -j\$(nproc)"
+  run "cd '${ASTERISK_G72X_BUILD_DIR}' && make -j$(asterisk_build_jobs)"
   codec_so="$(find "${ASTERISK_G72X_BUILD_DIR}" -path "*/codec_g729.so" -print -quit 2>/dev/null || true)"
   if [[ -z "$codec_so" ]]; then
     warn "Build asterisk-g72x terminou sem gerar codec_g729.so."
@@ -1336,13 +1414,36 @@ validate_and_start() {
   return 1
 }
 
+module_version_label() {
+  local version sha
+  version="$(cat "${PROJECT_ROOT}/VERSION" 2>/dev/null || echo unknown)"
+  sha="$(git -C "${PROJECT_ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  printf 'mnscloud-asterisk %s (%s)' "${version}" "${sha}"
+}
+
+# Argument names only: values such as --db-pass or --runtime-token are secrets.
+redacted_args() {
+  local arg out=()
+  for arg in "$@"; do
+    [[ "${arg}" == --* ]] && out+=("${arg}")
+  done
+  printf '%s' "${out[*]:-(none)}"
+}
+
+run_final_validation() {
+  if $DRY_RUN; then
+    log DRY "bash '${SCRIPT_DIR}/validate-asterisk.sh'"
+    return 0
+  fi
+  run "bash '${SCRIPT_DIR}/validate-asterisk.sh'"
+}
+
 main() {
   require_root
+  install_log_capture_start "install-asterisk $(module_version_label) args: $(redacted_args "$@")"
   parse_cli_args "$@"
   validate_mnscloud_agent
-  echo "asterisk        PABX - Asterisk 22.9.x LTS Multi-Tenant (official repository)"
-  echo "Mode: $([[ "$DRY_RUN" == true ]] && echo DRY-RUN || echo APPLY)"
-  echo "Log:  ${LOG_FILE}"
+  echo "asterisk        PABX - Asterisk ${ASTERISK_VERSION} LTS Multi-Tenant (official repository)"
   echo "=================================================="
   local app_security_script="${MNSCLOUD_MONOREPO_ROOT:-${PROJECT_ROOT}}/scripts/application-security.sh"
   [[ -f "${app_security_script}" ]] && run "bash '${app_security_script}'"
@@ -1367,7 +1468,8 @@ main() {
   write_asterisk_configs
   write_systemd_service
   validate_and_start
-  heartbeat || true
+  run_final_validation
+  heartbeat || warn "Final heartbeat to ${API_BASE} failed; see the heartbeat lines above."
   refresh_agent_capabilities
   ok "Asterisk installed and configured with MariaDB Realtime. Node UUID: ${NODE_UUID}"
 }

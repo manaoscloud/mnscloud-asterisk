@@ -87,6 +87,28 @@ When `scripts/update-asterisk.sh` is present, the Agent also reports
 `mnscloud.asterisk.update`, includes this runtime in heartbeat inventory, and can execute approved
 `mnscloud-asterisk` release rollouts from the MNSCloud control plane.
 
+### Install log and build diagnostics
+
+Every installer run appends its full session to `/var/log/mnscloud-install.log` (mode `0640`):
+a `START` line with the module version, argument names (never values), host context (OS, kernel,
+CPUs, RAM, swap, disk), every command with its complete stdout/stderr, and an `END OK` or
+`END FAILED` line with elapsed time. Nothing is filtered or sent to `/dev/null`.
+
+- Asterisk is compiled with `NOISY_BUILD=yes`, so the bundled pjproject/jansson compiler output
+  that Asterisk normally hides is written to the log.
+- Before downloading sources, a build preflight checks free disk (`ASTERISK_BUILD_MIN_DISK_MB`,
+  default `3072`) and memory. Parallel jobs are derived from RAM+swap
+  (`ASTERISK_BUILD_MB_PER_JOB`, default `1024`, capped at the CPU count) and can be forced with
+  `ASTERISK_BUILD_JOBS`.
+- A failed parallel build is retried once with `-j1` so the real compiler error is not
+  interleaved with other jobs.
+- On any failure the log records the failing command plus diagnostics: Asterisk and pjproject
+  `config.log` tails from this run, `free`, `df`, kernel OOM/kill events since the install
+  started, and failed systemd units.
+- The install ends by running `scripts/validate-asterisk.sh`.
+
+To review a failed install: `grep -nE 'ERROR|END ' /var/log/mnscloud-install.log | tail`.
+
 For a PABX trunk removed by the control plane, the assigned Agent sends
 `pjsip send unregister <registration>` before `pjsip reload` removes the realtime
 registration object. This prevents a provider from retaining an outbound SIP
