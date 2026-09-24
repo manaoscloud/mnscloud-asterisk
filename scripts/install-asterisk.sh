@@ -747,7 +747,9 @@ Port=${AST_DB_PORT}
 Database=${AST_DB_NAME}
 User=${AST_DB_USER}
 Password=${AST_DB_PASS}
-Option=3"
+Option=3
+CHARSET=utf8mb4
+INITSTMT=SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
   if getent group asterisk >/dev/null 2>&1; then
     run "chown root:asterisk /etc/odbc.ini"
     run "chmod 0640 /etc/odbc.ini"
@@ -775,7 +777,17 @@ validate_odbc_config() {
     err "Failed to validate ODBC DSN mnscloud_asterisk: ${output}"
     return 1
   fi
-  ok "DSN ODBC mnscloud_asterisk validado."
+  # MariaDB 11.2+ defaults utf8mb4 clients to utf8mb4_uca1400_ai_ci, which breaks realtime
+  # LIKE lookups against utf8mb4_unicode_ci views ("Illegal mix of collations").
+  set +e
+  output="$(printf "SELECT @@collation_connection;\n" | isql -b -v mnscloud_asterisk "${AST_DB_USER}" "${AST_DB_PASS}" 2>&1)"
+  rc=$?
+  set -e
+  if [[ "${rc}" -ne 0 || "${output}" != *utf8mb4_unicode_ci* ]]; then
+    err "ODBC DSN mnscloud_asterisk does not use utf8mb4_unicode_ci: ${output}"
+    return 1
+  fi
+  ok "DSN ODBC mnscloud_asterisk validado (collation utf8mb4_unicode_ci)."
 }
 
 write_asterisk_configs() {
@@ -784,7 +796,7 @@ write_asterisk_configs() {
   media_node_uuid_sql="$(sql_literal_escape "${NODE_UUID}")"
   media_token_sql="$(sql_literal_escape "$(url_encode "${API_TOKEN}")")"
 
-  for cfg in asterisk.conf modules.conf pjsip.conf extconfig.conf sorcery.conf res_odbc.conf func_odbc.conf extensions.conf queues.conf logger.conf cdr_adaptive_odbc.conf cel_odbc.conf; do
+  for cfg in asterisk.conf modules.conf ari.conf pjsip.conf extconfig.conf sorcery.conf res_odbc.conf func_odbc.conf extensions.conf queues.conf logger.conf cdr_adaptive_odbc.conf cel_odbc.conf; do
     backup_once "/etc/asterisk/${cfg}"
   done
 
@@ -823,7 +835,12 @@ load => res_http_media_cache.so
 load => res_security_log.so
 noload => codec_g729a.so
 noload => codec_g729b.so
-noload => chan_sip.so"
+noload => chan_sip.so
+noload => res_pjsip_config_wizard.so
+noload => res_stun_monitor.so"
+
+  write_file "/etc/asterisk/ari.conf" "[general]
+enabled = no"
 
   write_file "/etc/asterisk/res_odbc.conf" "[mnscloud]
 enabled => yes
@@ -1442,6 +1459,8 @@ main() {
   require_root
   install_log_capture_start "install-asterisk $(module_version_label) args: $(redacted_args "$@")"
   parse_cli_args "$@"
+  register_log_secret "${API_TOKEN}"
+  register_log_secret "${AST_DB_PASS}"
   validate_mnscloud_agent
   echo "asterisk        PABX - Asterisk ${ASTERISK_VERSION} LTS Multi-Tenant (official repository)"
   echo "=================================================="
@@ -1453,6 +1472,8 @@ main() {
   ensure_node_uuid_file
   ensure_api_token_file
   ensure_control_secret
+  register_log_secret "${API_TOKEN}"
+  register_log_secret "${AST_CONTROL_SECRET}"
   ensure_control_allowed_ips
   detect_asterisk_os >/dev/null
   info "Node UUID: ${NODE_UUID}"
@@ -1463,6 +1484,7 @@ main() {
   build_asterisk_g729_codec || true
   ensure_asterisk_user
   ensure_asterisk_db_config
+  register_log_secret "${AST_DB_PASS}"
   write_odbc_config
   validate_odbc_config
   write_asterisk_configs
