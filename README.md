@@ -43,6 +43,16 @@ PABX dial plan rules store their primary trunk and ordered fallback trunks in th
 plane. During an outbound attempt, Asterisk dials each resolved trunk in that order and stops on
 the first answered call. No trunk routing or fallback list is configured locally on the server.
 
+### Custom call flows
+
+Inbound routes and IVR options of type `custom` enter the `mnscloud-custom` context. The dialplan
+asks the MNSCloud API for one instruction per step
+(`GET /api/v1/pabx/asterisk/customs/<custom>/steps/<index>`, authenticated with the node token read
+from `/etc/mnscloud/pabx/api.token`) and only executes `playback`, `collect` (DTMF), `dial`,
+`hangup` or `next`. Integration HTTP calls, tenant URLs and their credentials are handled by the API;
+this server never calls tenant endpoints. The flow stops after 40 instructions or 5 Custom-to-Custom
+transfers, and an unreachable API ends the call with cause 34.
+
 ## Install
 
 Install GitHub CLI if needed:

@@ -896,11 +896,7 @@ readsql=SELECT IFNULL(VpiTimeoutSeconds, 10) FROM VoipPabxIvr WHERE VpiUUID = Fu
 
 [AST_IVR_OPTION_TARGET]
 dsn=mnscloud
-readsql=SELECT CASE WHEN opt.VioRouteType = 'extension' AND target.id IS NOT NULL THEN CONCAT('PJSIP/', target.id) WHEN opt.VioRouteType = 'external' AND NULLIF(TRIM(opt.VioRouteTargetValue), '') IS NOT NULL AND trunk_endpoint.id IS NOT NULL THEN CASE WHEN TRIM(opt.VioRouteTargetValue) REGEXP '^[A-Za-z]+/' THEN TRIM(opt.VioRouteTargetValue) ELSE CONCAT('PJSIP/', TRIM(opt.VioRouteTargetValue), '@', trunk_endpoint.id) END WHEN opt.VioRouteType = 'external' AND x.VpxUUID IS NOT NULL AND trunk_endpoint.id IS NOT NULL THEN CONCAT('PJSIP/', COALESCE(NULLIF(TRIM(x.VpxDialPrefix), ''), ''), x.VpxNumber, '@', trunk_endpoint.id) WHEN opt.VioRouteType = 'group' AND grp.VpgUUID IS NOT NULL THEN CONCAT('Local/', opt.VioRouteTargetUUID, '@mnscloud-group') WHEN opt.VioRouteType = 'queue' AND q.VpqUUID IS NOT NULL THEN CONCAT('Local/', opt.VioRouteTargetUUID, '@mnscloud-queue') WHEN opt.VioRouteType = 'ivr' AND next_ivr.VpiUUID IS NOT NULL THEN CONCAT('Local/', opt.VioRouteTargetUUID, '@mnscloud-ivr') WHEN opt.VioRouteType = 'custom' AND cst.VpcUUID IS NOT NULL THEN CONCAT('Local/', opt.VioRouteTargetUUID, '@mnscloud-custom') ELSE NULL END FROM VoipPabxIvrOption opt LEFT JOIN AsteriskEndpoint trunk_endpoint ON '\${SQL_ESC(\${ARG3})}' LIKE CONCAT('PJSIP/', trunk_endpoint.id, '-%') LEFT JOIN VoipPabxExtension target_ext ON opt.VioRouteType = 'extension' AND target_ext.VpeUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND target_ext.UserUsrUUID <=> opt.UserUsrUUID AND target_ext.VpeDateDeleted IS NULL AND target_ext.VpeEnabled = 1 LEFT JOIN AsteriskEndpoint target ON target.VoipPabxExtensionVpeUUID = target_ext.VpeUUID LEFT JOIN VoipPabxExternal x ON opt.VioRouteType = 'external' AND x.VpxUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND x.UserUsrUUID <=> opt.UserUsrUUID AND x.VpxDateDeleted IS NULL AND x.VpxEnabled = 1 LEFT JOIN VoipPabxGroup grp ON opt.VioRouteType = 'group' AND grp.VpgUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND grp.UserUsrUUID <=> opt.UserUsrUUID AND grp.VpgDateDeleted IS NULL AND grp.VpgEnabled = 1 LEFT JOIN VoipPabxQueue q ON opt.VioRouteType = 'queue' AND q.VpqUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND q.UserUsrUUID <=> opt.UserUsrUUID AND q.VpqDateDeleted IS NULL AND q.VpqEnabled = 1 LEFT JOIN VoipPabxIvr next_ivr ON opt.VioRouteType = 'ivr' AND next_ivr.VpiUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND next_ivr.UserUsrUUID <=> opt.UserUsrUUID AND next_ivr.VpiDateDeleted IS NULL AND next_ivr.VpiEnabled = 1 LEFT JOIN VoipPabxCustom cst ON opt.VioRouteType = 'custom' AND cst.VpcUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND cst.UserUsrUUID <=> opt.UserUsrUUID AND cst.VpcDateDeleted IS NULL AND cst.VpcEnabled = 1 WHERE opt.VoipPabxIvrVpiUUID = FuncUUIDToBin('\${SQL_ESC(\${ARG1})}') AND opt.VioDigit = '\${SQL_ESC(\${ARG2})}' AND opt.VioDateDeleted IS NULL AND opt.VioEnabled = 1 LIMIT 1
-
-[AST_CUSTOM_FALLBACK_TARGET]
-dsn=mnscloud
-readsql=SELECT CASE WHEN c.VpcFallbackRouteType = 'extension' AND target.id IS NOT NULL THEN CONCAT('PJSIP/', target.id) WHEN c.VpcFallbackRouteType = 'external' AND NULLIF(TRIM(c.VpcFallbackRouteTargetValue), '') IS NOT NULL AND trunk_endpoint.id IS NOT NULL THEN CASE WHEN TRIM(c.VpcFallbackRouteTargetValue) REGEXP '^[A-Za-z]+/' THEN TRIM(c.VpcFallbackRouteTargetValue) ELSE CONCAT('PJSIP/', TRIM(c.VpcFallbackRouteTargetValue), '@', trunk_endpoint.id) END WHEN c.VpcFallbackRouteType = 'group' AND grp.VpgUUID IS NOT NULL THEN CONCAT('Local/', c.VpcFallbackRouteTargetUUID, '@mnscloud-group') WHEN c.VpcFallbackRouteType = 'queue' AND q.VpqUUID IS NOT NULL THEN CONCAT('Local/', c.VpcFallbackRouteTargetUUID, '@mnscloud-queue') WHEN c.VpcFallbackRouteType = 'ivr' AND ivr.VpiUUID IS NOT NULL THEN CONCAT('Local/', c.VpcFallbackRouteTargetUUID, '@mnscloud-ivr') ELSE NULL END FROM VoipPabxCustom c LEFT JOIN AsteriskEndpoint trunk_endpoint ON '\${SQL_ESC(\${ARG2})}' LIKE CONCAT('PJSIP/', trunk_endpoint.id, '-%') LEFT JOIN VoipPabxExtension target_ext ON c.VpcFallbackRouteType = 'extension' AND target_ext.VpeUUID = FuncUUIDToBin(c.VpcFallbackRouteTargetUUID) AND target_ext.UserUsrUUID <=> c.UserUsrUUID AND target_ext.VpeDateDeleted IS NULL AND target_ext.VpeEnabled = 1 LEFT JOIN AsteriskEndpoint target ON target.VoipPabxExtensionVpeUUID = target_ext.VpeUUID LEFT JOIN VoipPabxGroup grp ON c.VpcFallbackRouteType = 'group' AND grp.VpgUUID = FuncUUIDToBin(c.VpcFallbackRouteTargetUUID) AND grp.UserUsrUUID <=> c.UserUsrUUID AND grp.VpgDateDeleted IS NULL AND grp.VpgEnabled = 1 LEFT JOIN VoipPabxQueue q ON c.VpcFallbackRouteType = 'queue' AND q.VpqUUID = FuncUUIDToBin(c.VpcFallbackRouteTargetUUID) AND q.UserUsrUUID <=> c.UserUsrUUID AND q.VpqDateDeleted IS NULL AND q.VpqEnabled = 1 LEFT JOIN VoipPabxIvr ivr ON c.VpcFallbackRouteType = 'ivr' AND ivr.VpiUUID = FuncUUIDToBin(c.VpcFallbackRouteTargetUUID) AND ivr.UserUsrUUID <=> c.UserUsrUUID AND ivr.VpiDateDeleted IS NULL AND ivr.VpiEnabled = 1 WHERE c.VpcUUID = FuncUUIDToBin('\${SQL_ESC(\${ARG1})}') AND c.VpcDateDeleted IS NULL AND c.VpcEnabled = 1 LIMIT 1"
+readsql=SELECT CASE WHEN opt.VioRouteType = 'extension' AND target.id IS NOT NULL THEN CONCAT('PJSIP/', target.id) WHEN opt.VioRouteType = 'external' AND NULLIF(TRIM(opt.VioRouteTargetValue), '') IS NOT NULL AND trunk_endpoint.id IS NOT NULL THEN CASE WHEN TRIM(opt.VioRouteTargetValue) REGEXP '^[A-Za-z]+/' THEN TRIM(opt.VioRouteTargetValue) ELSE CONCAT('PJSIP/', TRIM(opt.VioRouteTargetValue), '@', trunk_endpoint.id) END WHEN opt.VioRouteType = 'external' AND x.VpxUUID IS NOT NULL AND trunk_endpoint.id IS NOT NULL THEN CONCAT('PJSIP/', COALESCE(NULLIF(TRIM(x.VpxDialPrefix), ''), ''), x.VpxNumber, '@', trunk_endpoint.id) WHEN opt.VioRouteType = 'group' AND grp.VpgUUID IS NOT NULL THEN CONCAT('Local/', opt.VioRouteTargetUUID, '@mnscloud-group') WHEN opt.VioRouteType = 'queue' AND q.VpqUUID IS NOT NULL THEN CONCAT('Local/', opt.VioRouteTargetUUID, '@mnscloud-queue') WHEN opt.VioRouteType = 'ivr' AND next_ivr.VpiUUID IS NOT NULL THEN CONCAT('Local/', opt.VioRouteTargetUUID, '@mnscloud-ivr') WHEN opt.VioRouteType = 'custom' AND cst.VpcUUID IS NOT NULL THEN CONCAT('Local/', opt.VioRouteTargetUUID, '@mnscloud-custom') ELSE NULL END FROM VoipPabxIvrOption opt LEFT JOIN AsteriskEndpoint trunk_endpoint ON '\${SQL_ESC(\${ARG3})}' LIKE CONCAT('PJSIP/', trunk_endpoint.id, '-%') LEFT JOIN VoipPabxExtension target_ext ON opt.VioRouteType = 'extension' AND target_ext.VpeUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND target_ext.UserUsrUUID <=> opt.UserUsrUUID AND target_ext.VpeDateDeleted IS NULL AND target_ext.VpeEnabled = 1 LEFT JOIN AsteriskEndpoint target ON target.VoipPabxExtensionVpeUUID = target_ext.VpeUUID LEFT JOIN VoipPabxExternal x ON opt.VioRouteType = 'external' AND x.VpxUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND x.UserUsrUUID <=> opt.UserUsrUUID AND x.VpxDateDeleted IS NULL AND x.VpxEnabled = 1 LEFT JOIN VoipPabxGroup grp ON opt.VioRouteType = 'group' AND grp.VpgUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND grp.UserUsrUUID <=> opt.UserUsrUUID AND grp.VpgDateDeleted IS NULL AND grp.VpgEnabled = 1 LEFT JOIN VoipPabxQueue q ON opt.VioRouteType = 'queue' AND q.VpqUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND q.UserUsrUUID <=> opt.UserUsrUUID AND q.VpqDateDeleted IS NULL AND q.VpqEnabled = 1 LEFT JOIN VoipPabxIvr next_ivr ON opt.VioRouteType = 'ivr' AND next_ivr.VpiUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND next_ivr.UserUsrUUID <=> opt.UserUsrUUID AND next_ivr.VpiDateDeleted IS NULL AND next_ivr.VpiEnabled = 1 LEFT JOIN VoipPabxCustom cst ON opt.VioRouteType = 'custom' AND cst.VpcUUID = FuncUUIDToBin(opt.VioRouteTargetUUID) AND cst.UserUsrUUID <=> opt.UserUsrUUID AND cst.VpcDateDeleted IS NULL AND cst.VpcEnabled = 1 WHERE opt.VoipPabxIvrVpiUUID = FuncUUIDToBin('\${SQL_ESC(\${ARG1})}') AND opt.VioDigit = '\${SQL_ESC(\${ARG2})}' AND opt.VioDateDeleted IS NULL AND opt.VioEnabled = 1 LIMIT 1"
 
   write_file "/etc/asterisk/extconfig.conf" "[settings]
 ps_globals => odbc,mnscloud,AsteriskRealtimeGlobal
@@ -942,6 +938,8 @@ writeprotect=yes
 autofallthrough=yes
 
 [globals]
+MNSCLOUD_API_BASE=${API_BASE}
+MNSCLOUD_NODE_UUID=${NODE_UUID}
 
 [default]
 exten => _X.,1,NoOp(MNSCloud Asterisk PABX default context)
@@ -979,6 +977,7 @@ exten => _X.,1,NoOp(mnscloud authenticated call from \${CHANNEL(name)} to \${EXT
 [trunk-inbound]
 exten => _X.,1,NoOp(mnscloud inbound trunk call from \${CHANNEL(name)} to \${EXTEN})
  same => n,Set(__MNSCLOUD_INBOUND_CHANNEL=\${CHANNEL(name)})
+ same => n,Set(__MNSCLOUD_INBOUND_DID=\${EXTEN})
  same => n,Set(BLACKLIST_CAUSE=\${ODBC_AST_CHECK_INBOUND_BLACKLIST(\${CHANNEL(name)},\${CALLERID(num)})})
  same => n,GotoIf(\$[\"\${BLACKLIST_CAUSE}\" != \"\"]?blacklisted)
  same => n,Set(TARGET_DIAL=\${ODBC_AST_RESOLVE_INBOUND(\${CHANNEL(name)},\${EXTEN})})
@@ -1039,14 +1038,56 @@ exten => _.,1,NoOp(mnscloud ivr \${EXTEN})
  same => n(notfound),Hangup(404)
 
 [mnscloud-custom]
+; Custom pipeline: the MNSCloud API returns one instruction per step
+; (action,a1..a4,next). Integration calls run in the API, never here.
 exten => _.,1,NoOp(mnscloud custom pipeline \${EXTEN})
  same => n,Answer()
- same => n,Set(TARGET_DIAL=\${ODBC_AST_CUSTOM_FALLBACK_TARGET(\${EXTEN},\${MNSCLOUD_INBOUND_CHANNEL})})
- same => n,GotoIf(\$[\"\${TARGET_DIAL}\" = \"\"]?hangup_target)
- same => n,Dial(\${TARGET_DIAL},30)
+ same => n,Set(__MNSCUSTOM_HOPS=\$[\${IF(\$[\"\${MNSCUSTOM_HOPS}\" = \"\"]?0:\${MNSCUSTOM_HOPS})} + 1])
+ same => n,Set(MNSCUSTOM_TOKEN=\${FILTER(0-9A-Za-z,\${FILE(/etc/mnscloud/pabx/api.token)})})
+ same => n,Set(MNSCUSTOM_STEP=0)
+ same => n,Set(MNSCUSTOM_INPUT=)
+ same => n,Set(MNSCUSTOM_LOOPS=0)
+ same => n(request),Set(MNSCUSTOM_LOOPS=\$[\${MNSCUSTOM_LOOPS} + 1])
+ same => n,GotoIf(\$[\${MNSCUSTOM_LOOPS} > 40]?failed)
+ same => n,Set(CURLOPT(httpheader)=Authorization: Bearer \${MNSCUSTOM_TOKEN})
+ same => n,Set(CURLOPT(httpheader)=X-PABX-Node-UUID: \${MNSCLOUD_NODE_UUID})
+ same => n,Set(CURLOPT(conntimeout)=3)
+ same => n,Set(CURLOPT(httptimeout)=12)
+ same => n,Set(MNSCUSTOM_RESPONSE=\${CURL(\${MNSCLOUD_API_BASE}/api/v1/pabx/asterisk/customs/\${EXTEN}/steps/\${MNSCUSTOM_STEP}?caller=\${URIENCODE(\${CALLERID(num)})}&did=\${URIENCODE(\${MNSCLOUD_INBOUND_DID})}&input=\${URIENCODE(\${MNSCUSTOM_INPUT})}&call_id=\${URIENCODE(\${UNIQUEID})}&hops=\${MNSCUSTOM_HOPS})})
+ same => n,Set(MNSCUSTOM_FIELD=\${CUT(MNSCUSTOM_RESPONSE,&,1)})
+ same => n,Set(MNSCUSTOM_ACTION=\${URIDECODE(\${CUT(MNSCUSTOM_FIELD,=,2)})})
+ same => n,Set(MNSCUSTOM_FIELD=\${CUT(MNSCUSTOM_RESPONSE,&,2)})
+ same => n,Set(MNSCUSTOM_A1=\${URIDECODE(\${CUT(MNSCUSTOM_FIELD,=,2)})})
+ same => n,Set(MNSCUSTOM_FIELD=\${CUT(MNSCUSTOM_RESPONSE,&,3)})
+ same => n,Set(MNSCUSTOM_A2=\${URIDECODE(\${CUT(MNSCUSTOM_FIELD,=,2)})})
+ same => n,Set(MNSCUSTOM_FIELD=\${CUT(MNSCUSTOM_RESPONSE,&,4)})
+ same => n,Set(MNSCUSTOM_A3=\${URIDECODE(\${CUT(MNSCUSTOM_FIELD,=,2)})})
+ same => n,Set(MNSCUSTOM_FIELD=\${CUT(MNSCUSTOM_RESPONSE,&,5)})
+ same => n,Set(MNSCUSTOM_A4=\${URIDECODE(\${CUT(MNSCUSTOM_FIELD,=,2)})})
+ same => n,Set(MNSCUSTOM_FIELD=\${CUT(MNSCUSTOM_RESPONSE,&,6)})
+ same => n,Set(MNSCUSTOM_NEXT=\${URIDECODE(\${CUT(MNSCUSTOM_FIELD,=,2)})})
+ same => n,GotoIf(\$[\"\${MNSCUSTOM_ACTION}\" = \"playback\"]?playback)
+ same => n,GotoIf(\$[\"\${MNSCUSTOM_ACTION}\" = \"collect\"]?collect)
+ same => n,GotoIf(\$[\"\${MNSCUSTOM_ACTION}\" = \"next\"]?advance)
+ same => n,GotoIf(\$[\"\${MNSCUSTOM_ACTION}\" = \"dial\"]?dial)
+ same => n,GotoIf(\$[\"\${MNSCUSTOM_ACTION}\" = \"hangup\"]?hangup)
+ same => n,Goto(failed)
+ same => n(playback),Playback(\${MNSCUSTOM_A1})
+ same => n,Goto(advance)
+ same => n(collect),Set(MNSCUSTOM_INPUT=)
+ same => n,GotoIf(\$[\"\${MNSCUSTOM_A1}\" = \"\"]?collect_silent)
+ same => n,Read(MNSCUSTOM_INPUT,\${MNSCUSTOM_A1},\${MNSCUSTOM_A2},,\${MNSCUSTOM_A3},\${MNSCUSTOM_A4})
+ same => n,Goto(advance)
+ same => n(collect_silent),Read(MNSCUSTOM_INPUT,,\${MNSCUSTOM_A2},,\${MNSCUSTOM_A3},\${MNSCUSTOM_A4})
+ same => n(advance),GotoIf(\$[\"\${MNSCUSTOM_NEXT}\" = \"\"]?failed)
+ same => n,Set(MNSCUSTOM_STEP=\${MNSCUSTOM_NEXT})
+ same => n,Goto(request)
+ same => n(dial),Dial(\${MNSCUSTOM_A1},30)
  same => n,Gosub(mnscloud-dial-result,s,1(\${DIALSTATUS}))
  same => n,Hangup()
- same => n(hangup_target),Hangup(16)
+ same => n(hangup),Hangup(\${MNSCUSTOM_A1})
+ same => n(failed),NoOp(mnscloud custom pipeline unavailable for \${EXTEN})
+ same => n,Hangup(34)
 
 [mnscloud-dial-result]
 exten => s,1,NoOp(mnscloud dial result \${ARG1})
