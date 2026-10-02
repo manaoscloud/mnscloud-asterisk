@@ -50,8 +50,10 @@ asks the MNSCloud API for one instruction per step
 (`GET /api/v1/pabx/asterisk/customs/<custom>/steps/<index>`, authenticated with the node token read
 from `/etc/mnscloud/pabx/api.token`) and only executes `playback`, `collect` (DTMF), `dial`,
 `hangup` or `next`. Integration HTTP calls, tenant URLs and their credentials are handled by the API;
-this server never calls tenant endpoints. The flow stops after 40 instructions or 5 Custom-to-Custom
-transfers, and an unreachable API ends the call with cause 34.
+this server never calls tenant endpoints. The dialplan sends the time the call entered the Custom
+(`started`), so the API can send the call to the Custom fallback once its timeout has elapsed (checked
+between steps). The flow stops after 40 instructions or 5 Custom-to-Custom transfers, and an
+unreachable API ends the call with cause 34.
 
 ## Install
 
