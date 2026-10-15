@@ -43,6 +43,13 @@ PABX dial plan rules store their primary trunk and ordered fallback trunks in th
 plane. During an outbound attempt, Asterisk dials each resolved trunk in that order and stops on
 the first answered call. No trunk routing or fallback list is configured locally on the server.
 
+### Outbound tech prefix
+
+Each attempt sends `<tech prefix><routed number>`, where the tech prefix is the first one set on the
+calling extension, then on that attempt's trunk, then on the PABX account. The prefix is resolved
+per trunk, so a fallback carrier receives its own prefix (or none). `#` is sent escaped as `%23` in
+the Request-URI user part; digits and `*` are sent as is.
+
 ### Custom call flows
 
 Inbound routes and IVR options of type `custom` enter the `mnscloud-custom` context. The dialplan
