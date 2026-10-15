@@ -394,3 +394,22 @@ O instalador entrega a base Asterisk Realtime. A sincronização de entidades ca
 (`VoipPabxExtension`, `VoipPabxTrunk`, `VoipPabxInboundRoute` e regras de `VoipPabxDialPlanRule`) para
 as tabelas `Asterisk*` deve respeitar o contrato multi-tenant acima e acontecer pelas procedures
 do banco, não por scripts operacionais manuais.
+
+## Engine log settings (server Logs tab)
+
+The PABX server **Logs** tab (enable, level `error|warning|notice|info|debug`, retention 1-90 days)
+is applied by `mnscloud-asterisk-logs.timer`, installed by the installer and run every minute as
+root from `/usr/local/lib/mnscloud/engine-logs/asterisk-logs.py` (shared core:
+`scripts/mnscloud_engine_logs.py`, identical in every engine repository).
+
+- Source: authenticated `POST /api/v1/pabx/runtime/log-config` with the node identity; HTTPS only, no
+  redirects. When the API is unreachable the last applied settings stay in force.
+- Disabled log = level `error` (errors and security events are always kept). Debug is a 4 hour
+  window decided by the API; it falls back to `notice`. Below 15% free disk debug/info are capped at
+  `notice`.
+- Live apply: `logger reload`, `core set verbose 0|1|3|5`, `core set debug 5|off` and `pjsip set logger on|off` (debug only). `logger.conf` is rendered by the script; the `security` channel is never disabled. Re-applied after an engine restart.
+- Retention: Copy-and-truncate of `full`, `messages`, `security` and the CDR capture log in `/var/log/asterisk` (logger `rotatestrategy=none`), gzip, deletion past the retention. On a disk without room for the compressed copy nothing is changed; freeing space is an operator decision. The shared installer log `/var/log/mnscloud-install.log` follows the same
+  retention.
+- Status: `journalctl -u mnscloud-asterisk-logs` (one JSON line per run, never tokens).
+- Tests: `python3 tests/engine-logs.py && python3 tests/asterisk-logs.py`.
+

@@ -6,6 +6,8 @@ LOG_PREFIX="[install-asterisk]"
 source "$(dirname "$0")/lib/install-base.sh" "$@"
 # shellcheck disable=SC1091
 source "$(dirname "$0")/lib/env.sh"
+# shellcheck disable=SC1091
+source "$(dirname "$0")/lib/engine-logs.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -1127,19 +1129,26 @@ alias start => calldate"
 connection=mnscloud
 table=AsteriskCel"
 
-  write_file "/etc/asterisk/logger.conf" "[general]
-dateformat=%F %T
+  # Default (notice) until mnscloud-asterisk-logs.timer applies the server Logs tab; once that
+  # timer manages logger.conf, updates keep its file instead of resetting the level.
+  if ! grep -q '^; Managed by MNSCloud (PABX server Logs tab)' /etc/asterisk/logger.conf 2>/dev/null; then
+    write_file "/etc/asterisk/logger.conf" "; Managed by MNSCloud (PABX server Logs tab); rewritten by asterisk-logs.py.
+[general]
+dateformat=%F %T.%3q
+use_callids=yes
+rotatestrategy=none
 
 [logfiles]
 console => notice,warning,error
-messages => notice,warning,error,verbose,security
-full => notice,warning,error,debug,verbose,security
-security => security"
+security => security
+messages => notice,warning,error
+full => notice,warning,error,verbose(1)"
+  fi
 
   run "touch /var/log/asterisk/full /var/log/asterisk/messages /var/log/asterisk/security"
   run "touch /var/log/asterisk/mnscloud-cdr-diagnostic-capture.log"
   run "chown asterisk:asterisk /var/log/asterisk/full /var/log/asterisk/messages /var/log/asterisk/security /var/log/asterisk/mnscloud-cdr-diagnostic-capture.log"
-  run "chmod 0644 /var/log/asterisk/full /var/log/asterisk/messages /var/log/asterisk/security /var/log/asterisk/mnscloud-cdr-diagnostic-capture.log"
+  run "chmod 0640 /var/log/asterisk/full /var/log/asterisk/messages /var/log/asterisk/security /var/log/asterisk/mnscloud-cdr-diagnostic-capture.log"
 
   local local_ip permits permit_line
   local_ip="$(hostname -I 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i !~ /:/) { print $i; exit }}')"
@@ -1557,6 +1566,7 @@ main() {
   write_asterisk_configs
   write_systemd_service
   validate_and_start
+  install_engine_logs_timer asterisk "${SCRIPT_DIR}"
   run_final_validation
   heartbeat || warn "Final heartbeat to ${API_BASE} failed; see the heartbeat lines above."
   refresh_agent_capabilities
