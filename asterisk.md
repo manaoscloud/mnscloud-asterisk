@@ -263,9 +263,12 @@ IVR prompt delivery must respect the same media contract used by the platform:
 
 1. media file delivery mode;
 2. PABX media delivery mode;
-3. tenant `SystemParameter`;
-4. master `SystemParameter`;
+3. tenant VoIP PABX parameters (`VoipPabxParameter`);
+4. platform VoIP PABX parameters;
 5. default `offline`.
+
+The database resolves this order in `FuncVoipPabxMediaRuntimeJson` (`deliveryMode`);
+`ODBC_AST_IVR_AUDIO` only reads that value and never queries parameter tables directly.
 
 When the effective mode is `offline`, `ODBC_AST_IVR_AUDIO` returns the synchronized local
 `VoipPabxMediaFileSync.VmsDialPath` for the current PABX server. When the effective mode is
