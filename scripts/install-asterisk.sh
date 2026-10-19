@@ -1178,6 +1178,8 @@ deny=0.0.0.0/0.0.0.0
 ${permit_line}"
 
   run "chown -R asterisk:asterisk /etc/asterisk"
+  # res_odbc.conf carries the database password: owner and group only.
+  run "chmod 0640 /etc/asterisk/res_odbc.conf"
 }
 
 write_systemd_service() {

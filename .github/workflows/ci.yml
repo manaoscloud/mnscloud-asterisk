@@ -22,3 +22,5 @@ jobs:
         run: bash tests/apt-lock-wait.sh
       - name: Engine log settings contract
         run: python3 tests/engine-logs.py && python3 tests/asterisk-logs.py
+      - name: Database credential adapter
+        run: python3 tests/database-credential.py
