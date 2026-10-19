@@ -151,3 +151,16 @@ when the local registration is already missing, rather than falsely confirming
 carrier-side removal.
 
 See `asterisk.md` and `SECURITY.md` for details.
+
+## Agent-managed database credential
+
+Asterisk connects to MariaDB with its own principal (profile `asterisk-realtime`: object-level grants
+on its realtime views, the PABX routing tables, CDR/CEL and the routing functions; mnscloud-db
+`docs/db-patterns.md` → Per-module database principals), not the shared application user. The Agent
+(`mnscloud.module.database.credential.v1`) runs `scripts/apply-database-credential.py` with the
+credential on stdin. It changes only the user/password lines of `/etc/mnscloud/pabx/db.conf`,
+`/etc/odbc.ini` and `/etc/asterisk/res_odbc.conf` (written `0640`; the installer no longer leaves it
+world-readable), reloads `res_odbc` (calls stay up) and proves that Asterisk reconnected as the new
+account, that the account reads the realtime and routing tables and runs the functions, and that the
+PJSIP realtime endpoint count is unchanged. Otherwise the three files are restored. Never edit these
+lines by hand on a host with a managed principal.
