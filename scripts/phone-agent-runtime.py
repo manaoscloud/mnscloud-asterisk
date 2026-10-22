@@ -28,8 +28,10 @@ def save_state(known, pending):
     with STATE_LOCK:
         STATE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         temporary = STATE.with_suffix('.tmp')
-        temporary.write_text(json.dumps({'known': known, 'pending': pending, 'syncedAt': LAST_SYNC_AT}))
-        temporary.chmod(0o600)
+        # The path is fixed; engine/API data is serialized only as file contents.
+        with temporary.open('w', encoding='utf-8') as stream:
+            temporary.chmod(0o600)
+            json.dump({'known': known, 'pending': pending, 'syncedAt': LAST_SYNC_AT}, stream)
         temporary.replace(STATE)
 
 def load_state():
@@ -63,7 +65,8 @@ def api(body=None):
 
 
 def fields(raw):
-    return dict(line.split(': ', 1) for line in raw.replace('\r', '').split('\n') if ': ' in line)
+    pairs = (line.split(': ', 1) for line in raw.replace('\r', '').split('\n') if ': ' in line)
+    return {key: value for key, value in pairs}
 
 
 def event_payload(event):
@@ -101,10 +104,157 @@ def desired(sock, rows, known):
         action(sock, Action='QueuePenalty', Queue=queue, Interface=interface, Penalty=int(row['penalty']))
         action(sock, Action='QueuePause', Queue=queue, Interface=interface,
                Paused='false' if row['state'] == 'AVAILABLE' else 'true', Reason='MNSCloud agent state')
-    for key, row in list(known.items()):
+    for key, row in known.items():
         if key not in current:
             action(sock, Action='QueueRemove', Queue=row['queueName'], Interface=row['interface'])
     return current
+
+
+class Bridge:
+    def __init__(self, sock, params=None):
+        self.sock = sock
+        self.params = params
+        self.known, self.pending = load_state()
+        BLOCKED.clear()
+        BLOCKED.update(event['agentUUID'] for event in self.pending)
+        self.ready = False
+        self.ready_by = time.monotonic() + 15
+        self.stopped = threading.Event()
+        self.wakeup = threading.Event()
+        self.buffer = b''
+        self.metrics = {}
+        self.snapshot = {}
+
+    def active(self):
+        return not self.stopped.is_set() and not SHUTDOWN.is_set()
+
+    def replay(self):
+        while self.pending and self.active():
+            try:
+                api(self.pending[0])
+            except urllib.error.HTTPError as error:
+                # Deleted memberships and superseded stations cannot be replayed.
+                if error.code != 409:
+                    raise
+            with SOCKET_LOCK:
+                self.pending.pop(0)
+                save_state(self.known, self.pending)
+
+    def report_counters(self, counters):
+        for queue, values in counters.items():
+            if not self.active():
+                return
+            api({'kind': 'queue', 'queueUUID': queue.removeprefix('mnscloud-'), **values})
+
+    def sync_once(self):
+        global LAST_SYNC_AT
+        self.replay()
+        if not self.active():
+            return
+        rows = api()
+        with SOCKET_LOCK:
+            BLOCKED.intersection_update(event['agentUUID'] for event in self.pending)
+            self.known = desired(self.sock, rows, self.known)
+        self.observe(rows)
+        LAST_SYNC_AT = time.time()
+        with SOCKET_LOCK:
+            save_state(self.known, self.pending)
+
+    def synchronize(self):
+        try:
+            while self.active():
+                if not self.ready:
+                    self.wakeup.wait(0.2)
+                    continue
+                try:
+                    self.sync_once()
+                except (OSError, ValueError, KeyError):
+                    self.pause_all()
+                self.wakeup.wait(5)
+                self.wakeup.clear()
+        finally:
+            self.stopped.set()
+
+    def record_event(self, event):
+        if not event:
+            return
+        with SOCKET_LOCK:
+            BLOCKED.add(event['agentUUID'])
+            self.pause_agent(event['agentUUID'])
+            self.pending.append(event)
+            save_state(self.known, self.pending)
+            self.wakeup.set()
+            if len(self.pending) > 1000:
+                raise ValueError('Event backlog requires recovery')
+
+    def receive(self):
+        if not self.ready and time.monotonic() > self.ready_by:
+            raise ConnectionError('Event subscription unavailable')
+        data = self.sock.recv(65536)
+        if not data:
+            raise ConnectionError('Event socket closed')
+        self.buffer += data
+        if len(self.buffer) > 1048576:
+            raise ValueError('Event frame too large')
+        self.parse_frames()
+
+    def run(self):
+        worker = threading.Thread(target=self.synchronize, daemon=True)
+        worker.start()
+        try:
+            while self.active():
+                try:
+                    self.receive()
+                except socket.timeout:
+                    pass
+        finally:
+            self.stopped.set()
+            self.wakeup.set()
+            worker.join()
+            if SHUTDOWN.is_set():
+                self.known = desired(self.sock, [], self.known)
+                save_state(self.known, self.pending)
+
+    def pause_all(self):
+        with SOCKET_LOCK:
+            for row in self.known.values():
+                action(self.sock, Action='QueuePause', Queue=row['queueName'], Interface=row['interface'], Paused='true', Reason='Control plane unavailable')
+
+    def pause_agent(self, agent):
+        for member in self.known.values():
+            if member.get('agentName') == 'agent-' + agent:
+                action(self.sock, Action='QueuePause', Queue=member['queueName'], Interface=member['interface'], Paused='true', Reason='Contact event')
+
+    def observe(self, rows):
+        self.report_counters(self.metrics.copy())
+        self.snapshot = {}
+        action(self.sock, Action='QueueStatus')
+
+    def handle_frame(self, values):
+        queue = values.get('Queue', '')
+        kind = values.get('Event')
+        if kind == 'QueueParams' and UUID.fullmatch(queue.removeprefix('mnscloud-')):
+            self.snapshot[queue] = {'waiting': max(0, int(values.get('Calls', 0))), 'longestWait': 0}
+        if kind == 'QueueEntry' and queue in self.snapshot:
+            self.snapshot[queue]['longestWait'] = max(self.snapshot[queue]['longestWait'], int(values.get('Wait', 0)))
+        if kind == 'QueueStatusComplete':
+            self.ready = True
+            self.metrics = self.snapshot.copy()
+        if kind == 'QueueMember' and values.get('Name', '').startswith('agent-'):
+            self.restore_member(values)
+        self.record_event(event_payload(values))
+
+    def restore_member(self, values):
+        queue, interface = values.get('Queue', ''), values.get('Location', '')
+        if SAFE.fullmatch(queue) and SAFE.fullmatch(interface):
+            key = queue + '|' + interface
+            with SOCKET_LOCK:
+                self.known[key] = {**self.known.get(key, {}), 'queueName': queue, 'interface': interface, 'agentName': values['Name']}
+
+    def parse_frames(self):
+        while b'\r\n\r\n' in self.buffer:
+            frame, self.buffer = self.buffer.split(b'\r\n\r\n', 1)
+            self.handle_frame(fields(frame.decode(errors='replace')))
 
 
 def run():
@@ -117,104 +267,7 @@ def run():
         sock.settimeout(1)
         action(sock, Action='Login', Username='mnscloud', Secret=config.get('mnscloud', 'secret'), Events='on')
         action(sock, Action='QueueStatus')
-        buffer = ''
-        ready = False
-        ready_by = time.monotonic() + 15
-        known, pending = load_state()
-        BLOCKED.clear()
-        BLOCKED.update(event['agentUUID'] for event in pending)
-        metrics = {}
-        snapshot = {}
-        stopped = threading.Event()
-        wakeup = threading.Event()
-        def synchronize():
-            global LAST_SYNC_AT
-            nonlocal known, snapshot
-            try:
-                while not stopped.is_set() and not SHUTDOWN.is_set():
-                    if not ready:
-                        wakeup.wait(0.2)
-                        continue
-                    try:
-                        while pending and not stopped.is_set():
-                            try:
-                                api(pending[0])
-                            except urllib.error.HTTPError as error:
-                                # A deleted membership or superseded station cannot be replayed.
-                                if error.code != 409:
-                                    raise
-                            pending.pop(0)
-                            save_state(known, pending)
-                        for queue, counters in metrics.items():
-                            if stopped.is_set(): return
-                            api({'kind': 'queue', 'queueUUID': queue.removeprefix('mnscloud-'), **counters})
-                        if stopped.is_set(): return
-                        rows = api()
-                        with SOCKET_LOCK:
-                            BLOCKED.intersection_update(event['agentUUID'] for event in pending)
-                            known = desired(sock, rows, known)
-                        snapshot = {}
-                        action(sock, Action='QueueStatus')
-                        LAST_SYNC_AT = time.time()
-                        save_state(known, pending)
-                    except (OSError, ValueError, KeyError):
-                        # Losing control-plane access must not route new calls to managed agents.
-                        for row in list(known.values()):
-                            action(sock, Action='QueuePause', Queue=row['queueName'], Interface=row['interface'], Paused='true', Reason='Control plane unavailable')
-                    wakeup.wait(5)
-                    wakeup.clear()
-            finally:
-                stopped.set()
-        worker = threading.Thread(target=synchronize, daemon=True)
-        worker.start()
-        try:
-            while not stopped.is_set() and not SHUTDOWN.is_set():
-                if not ready and time.monotonic() > ready_by:
-                    raise ConnectionError('AMI subscription unavailable')
-                try:
-                    data = sock.recv(65536)
-                    if not data:
-                        raise ConnectionError('AMI closed')
-                    buffer += data.decode(errors='replace')
-                    if len(buffer) > 1048576:
-                        raise ValueError('AMI frame too large')
-                    while '\r\n\r\n' in buffer:
-                        frame, buffer = buffer.split('\r\n\r\n', 1)
-                        values = fields(frame)
-                        queue = values.get('Queue', '')
-                        if values.get('Event') == 'QueueParams' and UUID.fullmatch(queue.removeprefix('mnscloud-')):
-                            snapshot[queue] = {'waiting': max(0, int(values.get('Calls', 0))), 'longestWait': 0}
-                        if values.get('Event') == 'QueueEntry' and queue in snapshot:
-                            snapshot[queue]['longestWait'] = max(snapshot[queue]['longestWait'], int(values.get('Wait', 0)))
-                        if values.get('Event') == 'QueueStatusComplete':
-                            ready = True
-                            metrics = snapshot.copy()
-                        if values.get('Event') == 'QueueMember' and values.get('Name', '').startswith('agent-'):
-                            queue, interface = values.get('Queue', ''), values.get('Location', '')
-                            if SAFE.fullmatch(queue) and SAFE.fullmatch(interface):
-                                known[queue+'|'+interface] = {**known.get(queue+'|'+interface, {}), 'queueName': queue, 'interface': interface, 'agentName': values['Name']}
-                        event = event_payload(values)
-                        if event:
-                            with SOCKET_LOCK:
-                                BLOCKED.add(event['agentUUID'])
-                                # Pause immediately on the local event path, independent of HTTP latency.
-                                for member in list(known.values()):
-                                    if member.get('agentName') == 'agent-' + event['agentUUID']:
-                                        action(sock, Action='QueuePause', Queue=member['queueName'], Interface=member['interface'], Paused='true', Reason='Contact event')
-                                pending.append(event)
-                                save_state(known, pending)
-                                wakeup.set()
-                                if len(pending) > 1000:
-                                    raise ValueError('Event backlog requires recovery')
-                except socket.timeout:
-                    pass
-        finally:
-            stopped.set()
-            wakeup.set()
-            worker.join()
-            if SHUTDOWN.is_set():
-                known = desired(sock, [], known)
-                save_state(known, pending)
+        Bridge(sock).run()
 
 
 if __name__ == '__main__':
