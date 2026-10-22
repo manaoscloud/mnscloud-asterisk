@@ -101,7 +101,7 @@ def desired(sock, rows, known):
         action(sock, Action='QueuePenalty', Queue=queue, Interface=interface, Penalty=int(row['penalty']))
         action(sock, Action='QueuePause', Queue=queue, Interface=interface,
                Paused='false' if row['state'] == 'AVAILABLE' else 'true', Reason='MNSCloud agent state')
-    for key, row in known.items():
+    for key, row in list(known.items()):
         if key not in current:
             action(sock, Action='QueueRemove', Queue=row['queueName'], Interface=row['interface'])
     return current
@@ -159,7 +159,7 @@ def run():
                         save_state(known, pending)
                     except (OSError, ValueError, KeyError):
                         # Losing control-plane access must not route new calls to managed agents.
-                        for row in known.values():
+                        for row in list(known.values()):
                             action(sock, Action='QueuePause', Queue=row['queueName'], Interface=row['interface'], Paused='true', Reason='Control plane unavailable')
                     wakeup.wait(5)
                     wakeup.clear()
