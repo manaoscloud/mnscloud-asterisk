@@ -1153,7 +1153,8 @@ full => notice,warning,error,verbose(1)"
   local local_ip permits permit_line
   local_ip="$(hostname -I 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i !~ /:/) { print $i; exit }}')"
   permits="${AST_CONTROL_ALLOWED_IPS:-${local_ip}/255.255.255.255}"
-  permit_line=""
+  permit_line="permit=${local_ip}/255.255.255.255
+"
   IFS=',' read -ra entries <<< "${permits}"
   for entry in "${entries[@]}"; do
     entry="$(echo "$entry" | xargs)"
@@ -1533,6 +1534,35 @@ run_final_validation() {
   run "bash '${SCRIPT_DIR}/validate-asterisk.sh'"
 }
 
+install_phone_agent_bridge() {
+  run "install -d -m 0755 /usr/local/lib/mnscloud/asterisk"
+  run "install -m 0755 '${SCRIPT_DIR}/phone-agent-runtime.py' /usr/local/lib/mnscloud/asterisk/phone-agent-runtime.py"
+  write_file "/etc/systemd/system/mnscloud-asterisk-phone-agent.service" "[Unit]
+Description=MNSCloud asterisk contact-center agent bridge
+After=network-online.target asterisk.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/lib/mnscloud/asterisk/phone-agent-runtime.py
+Restart=always
+RestartSec=5
+StateDirectory=mnscloud-asterisk-phone-agent
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
+"
+  run "systemctl daemon-reload"
+  run "systemctl enable mnscloud-asterisk-phone-agent.service"
+  run "systemctl restart mnscloud-asterisk-phone-agent.service"
+}
+
 main() {
   require_root
   install_log_capture_start "install-asterisk $(module_version_label) args: $(redacted_args "$@")"
@@ -1569,6 +1599,7 @@ main() {
   write_systemd_service
   validate_and_start
   install_engine_logs_timer asterisk "${SCRIPT_DIR}"
+  install_phone_agent_bridge
   run_final_validation
   heartbeat || warn "Final heartbeat to ${API_BASE} failed; see the heartbeat lines above."
   refresh_agent_capabilities
