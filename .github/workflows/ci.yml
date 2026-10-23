@@ -24,3 +24,5 @@ jobs:
         run: python3 tests/engine-logs.py && python3 tests/asterisk-logs.py
       - name: Database credential adapter
         run: python3 tests/database-credential.py
+      - name: Phone agent event bridge
+        run: python3 tests/phone-agent-runtime.py

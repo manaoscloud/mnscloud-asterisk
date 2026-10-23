@@ -60,4 +60,8 @@ wait_for 'Asterisk CLI cannot query core version.' 15 2 "$ASTERISK_BIN" -rx 'cor
 wait_for 'res_pjsip.so is not loaded.' 15 2 bash -c "\"$ASTERISK_BIN\" -rx 'module show like res_pjsip.so' | grep -q 'res_pjsip.so'"
 wait_for 'res_config_odbc.so is not loaded.' 15 2 bash -c "\"$ASTERISK_BIN\" -rx 'module show like res_config_odbc.so' | grep -q 'res_config_odbc.so'"
 
+wait_for 'Phone agent bridge is not active.' 15 2 systemctl is-active --quiet mnscloud-asterisk-phone-agent.service
+
+wait_for 'Phone agent bridge has no recent control-plane sync.' 30 2 python3 -c 'import json,time; from pathlib import Path; p=Path("/var/lib/mnscloud-asterisk-phone-agent/state.json"); raise SystemExit(0 if p.exists() and time.time()-json.loads(p.read_text()).get("syncedAt",0)<60 else 1)'
+
 printf '[validate-asterisk] Asterisk runtime validation OK\n'
