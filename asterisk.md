@@ -147,7 +147,7 @@ Regras obrigatórias:
   `AsteriskAor.id` devem evitar colisão entre tenants/domínios.
 - Para ramais SIP de tenant com domínio, o identificador técnico padrão é
   `LOWER(CONCAT(VpeUsername, '@', VoipDomain.VdmName))`, por exemplo
-  `5009@pabx-dev3.publichost.cloud`. O `AsteriskAuth.username` permanece apenas o ramal
+  `5009@pabx.example.com`. O `AsteriskAuth.username` permanece apenas o ramal
   (`5009`) para que o cliente continue autenticando com usuário curto dentro do domínio SIP.
 - O `AsteriskAuth.realm` dos ramais deve ser o domínio SIP (`VoipDomain.VdmName`), evitando que
   clientes recebam desafio digest com o realm global `asterisk` e deixem de completar o REGISTER.
@@ -165,8 +165,8 @@ Regras obrigatórias:
   regra de plano de discagem. O Asterisk tenta cada tronco sequencialmente e não mantém listas de
   roteamento locais.
 - Hints/BLF devem ser tenant-aware. Quando forem provisionados no realtime, devem usar o endpoint
-  técnico completo como extensão (`1100@pabx-dev1.publichost.cloud`) apontando para
-  `PJSIP/1100@pabx-dev1.publichost.cloud`, nunca apenas o ramal curto (`1100`) em contexto comum.
+  técnico completo como extensão (`1100@pabx.example.com`) apontando para
+  `PJSIP/1100@pabx.example.com`, nunca apenas o ramal curto (`1100`) em contexto comum.
 - Para BLF em telefones/softphones, o valor monitorado deve ser o endpoint técnico completo
   (`ramal@dominio`). A chamada interna continua discando o ramal curto (`1100`), mas a assinatura
   BLF precisa ser única no contexto compartilhado `authenticated`.
@@ -335,7 +335,7 @@ O instalador valida o cadastro com:
 ```bash
 NODE_UUID="$(tr -d '[:space:]' < /etc/mnscloud/pabx/node.uuid)"
 
-curl -i -X POST "https://dev1.publichost.cloud/api/v1/pabx/asterisk/heartbeat?node_uuid=${NODE_UUID}" \
+curl -i -X POST "https://api.example.com/api/v1/pabx/asterisk/heartbeat?node_uuid=${NODE_UUID}" \
   -H "Content-Type: application/json" \
   --data "{\"hostname\":\"$(hostname -f 2>/dev/null || hostname)\",\"engine\":\"asterisk\"}"
 ```
