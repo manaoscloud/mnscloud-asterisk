@@ -35,6 +35,10 @@ monorepo at runtime.
 - Local state prefix: `/etc/mnscloud/pabx`
 - Install flags: `--api-base`, `--node-uuid`, `--runtime-token`/`--install-token`, and optional
   `--db-host`, `--db-port`, `--db-name`, `--db-user`, `--db-pass`.
+  Secrets on the command line (`--runtime-token`, `--install-token`, `--db-pass`) end up in shell
+  history and process listings: they are a bootstrap/legacy path only. The normal path is the
+  API/Agent-delivered principal and token files; never put these flags in generated or documented
+  commands with real values.
 
 ## Checklist
 
