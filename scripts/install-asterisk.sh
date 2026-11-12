@@ -1120,14 +1120,18 @@ persistentmembers = no
 autofill = yes
 shared_lastcall = yes"
 
+  # The database stores UTC (mnscloud-db UTC clock cutover): CDR and CEL times leave in UTC,
+  # whatever the host time zone.
   write_file "/etc/asterisk/cdr_adaptive_odbc.conf" "[mnscloud]
 connection=mnscloud
 table=AsteriskCdr
+usegmtime=yes
 alias start => calldate"
 
   write_file "/etc/asterisk/cel_odbc.conf" "[mnscloud]
 connection=mnscloud
-table=AsteriskCel"
+table=AsteriskCel
+usegmtime=yes"
 
   # Default (notice) until mnscloud-asterisk-logs.timer applies the server Logs tab; once that
   # timer manages logger.conf, updates keep its file instead of resetting the level.
